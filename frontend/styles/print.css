@@ -1,0 +1,140 @@
+/**
+ * Print-specific styles
+ * Optimized for credential verification and PDF generation
+ */
+
+@media print {
+  /* Reset page margins */
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+
+  /* Hide non-printable elements */
+  header,
+  nav,
+  aside,
+  .no-print,
+  .btn,
+  .button,
+  button,
+  [role="button"],
+  .sidebar,
+  .topbar,
+  .footer,
+  .navigation,
+  .modal-backdrop,
+  .toast,
+  .dropdown-menu {
+    display: none !important;
+  }
+
+  /* Body styles */
+  body {
+    background: white;
+    color: black;
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+
+  /* Ensure content fits on page */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Typography */
+  h1 {
+    font-size: 24pt;
+    page-break-after: avoid;
+  }
+
+  h2 {
+    font-size: 18pt;
+    page-break-after: avoid;
+  }
+
+  h3 {
+    font-size: 14pt;
+    page-break-after: avoid;
+  }
+
+  /* Avoid page breaks inside elements */
+  table,
+  figure,
+  img,
+  .card,
+  .credential-card,
+  .verification-badge {
+    page-break-inside: avoid;
+  }
+
+  /* Tables */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1em;
+  }
+
+  th,
+  td {
+    border: 1px solid #333;
+    padding: 8px;
+    text-align: left;
+  }
+
+  th {
+    background-color: #f0f0f0 !important;
+    font-weight: bold;
+  }
+
+  /* Links */
+  a[href]:after {
+    content: " (" attr(href) ")";
+    font-size: 90%;
+    color: #666;
+  }
+
+  a[href^="#"]:after,
+  a[href^="javascript"]:after {
+    content: "";
+  }
+
+  /* Images */
+  img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Credential-specific styles */
+  .credential-detail,
+  .verification-result {
+    border: 2px solid #000;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .verification-badge {
+    border: 3px solid #16a34a;
+    padding: 10px;
+    font-weight: bold;
+  }
+
+  /* QR codes and logos should be visible */
+  .qr-code,
+  .logo {
+    display: block !important;
+  }
+
+  /* Page breaks */
+  .page-break {
+    page-break-after: always;
+  }
+
+  /* Signature areas */
+  .signature-block {
+    margin-top: 2cm;
+    border-top: 1px solid #333;
+    padding-top: 5px;
+  }
+}
