@@ -1,0 +1,832 @@
+// ===========================================
+// PARAM Database Schema - Prisma
+// ===========================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================
+// ENUMS
+// ===========================================
+
+enum Role {
+  ADMIN
+  ACADEMIC
+  STUDENT
+  VERIFIER
+}
+
+enum UserStatus {
+  PENDING_ACTIVATION
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum StudentStatus {
+  PENDING_ACTIVATION
+  ACTIVE
+  LEAVE_OF_ABSENCE
+  REPEAT_YEAR
+  DROPPED_OUT
+  EARLY_EXIT
+  GRADUATED
+}
+
+enum CurriculumStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum CourseType {
+  MANDATORY
+  ELECTIVE
+  MOOC
+  COLLOQUIUM
+  PROJECT
+  INTERNSHIP
+}
+
+enum ResultStatus {
+  DRAFT
+  REVIEWED
+  APPROVED
+  ISSUED
+  WITHHELD
+}
+
+enum ApprovalType {
+  CURRICULUM
+  SEMESTER_RESULT
+  DEGREE_PROPOSAL
+  CORRECTION
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CredentialType {
+  SEMESTER
+  DEGREE
+  CERTIFICATE
+}
+
+enum CredentialStatus {
+  PENDING
+  ISSUED
+  REVOKED
+  REPLACED
+}
+
+enum DegreeProposalStatus {
+  DRAFT
+  PENDING_ACADEMIC
+  PENDING_ADMIN
+  APPROVED
+  REJECTED
+  ISSUED
+}
+
+enum CorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PROCESSED
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum JobType {
+  CSV_PARSE_STUDENTS
+  CSV_PARSE_RESULTS
+  PDF_GENERATE_SEMESTER
+  PDF_GENERATE_DEGREE
+  BLOCKCHAIN_MINT_SEMESTER
+  BLOCKCHAIN_MINT_DEGREE
+  BLOCKCHAIN_REVOKE
+  EMAIL_SEND
+}
+
+enum AuditAction {
+  // Auth
+  USER_LOGIN
+  USER_LOGOUT
+  USER_ACTIVATED
+  PASSWORD_RESET
+  
+  // Users
+  USER_CREATED
+  USER_UPDATED
+  USER_ROLE_CHANGED
+  USER_DEACTIVATED
+  
+  // Students
+  STUDENT_CREATED
+  STUDENT_UPDATED
+  STUDENT_STATUS_CHANGED
+  STUDENTS_BULK_UPLOADED
+  
+  // Curriculum
+  CURRICULUM_CREATED
+  CURRICULUM_UPDATED
+  CURRICULUM_APPROVED
+  CURRICULUM_ARCHIVED
+  
+  // Results
+  RESULTS_UPLOADED
+  RESULT_UPDATED
+  RESULT_SUBMITTED_FOR_REVIEW
+  RESULT_APPROVED
+  RESULT_REJECTED
+  
+  // Credentials
+  CREDENTIAL_MINTED
+  CREDENTIAL_REVOKED
+  CREDENTIAL_REPLACED
+  
+  // Degrees
+  DEGREE_PROPOSED
+  DEGREE_APPROVED
+  DEGREE_REJECTED
+  DEGREE_ISSUED
+  
+  // Corrections
+  CORRECTION_REQUESTED
+  CORRECTION_APPROVED
+  CORRECTION_REJECTED
+  
+  // System
+  SETTINGS_UPDATED
+  EXPORT_GENERATED
+  OVERRIDE_USED
+}
+
+// ===========================================
+// CORE ENTITIES
+// ===========================================
+
+model User {
+  id            String     @id @default(cuid())
+  privyId       String     @unique // Privy DID
+  email         String     @unique
+  name          String
+  role          Role       @default(STUDENT)
+  status        UserStatus @default(PENDING_ACTIVATION)
+  
+  // Profile
+  phone         String?
+  avatarUrl     String?
+  
+  // Timestamps
+  activatedAt   DateTime?
+  lastLoginAt   DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  
+  // Relations
+  student       Student?
+  approvals     Approval[]        @relation("ApprovalApprover")
+  auditLogs     AuditLog[]        @relation("AuditActor")
+  corrections   CorrectionRequest[] @relation("CorrectionRequester")
+  
+  @@index([email])
+  @@index([privyId])
+  @@index([role])
+  @@map("users")
+}
+
+model Student {
+  id                String        @id @default(cuid())
+  userId            String        @unique
+  
+  // Academic Info
+  enrollmentNumber  String        @unique // Roll number
+  name              String
+  email             String        // Personal email (may differ from user email)
+  
+  // Program & Batch
+  programId         String
+  curriculumId      String?
+  batch             String        // e.g., "2020-2024"
+  admissionYear     Int
+  expectedGradYear  Int
+  
+  // Academic Progress
+  currentSemester   Int           @default(1)
+  totalCredits      Int           @default(0)
+  cgpa              Float?
+  
+  // Status
+  status            StudentStatus @default(PENDING_ACTIVATION)
+  statusReason      String?
+  statusChangedAt   DateTime?
+  
+  // Personal Info
+  dateOfBirth       DateTime?
+  phone             String?
+  address           String?
+  guardianName      String?
+  guardianPhone     String?
+  
+  // Timestamps
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  
+  // Relations
+  user              User          @relation(fields: [userId], references: [id])
+  program           Program       @relation(fields: [programId], references: [id])
+  curriculum        Curriculum?   @relation(fields: [curriculumId], references: [id])
+  semesterResults   SemesterResult[]
+  courseResults     CourseResult[]
+  credentials       Credential[]
+  degreeProposals   DegreeProposal[]
+  corrections       CorrectionRequest[] @relation("CorrectionStudent")
+  shareLinks        ShareLink[]
+  
+  @@index([enrollmentNumber])
+  @@index([programId])
+  @@index([batch])
+  @@index([status])
+  @@map("students")
+}
+
+// ===========================================
+// CURRICULUM & COURSES
+// ===========================================
+
+model Program {
+  id              String       @id @default(cuid())
+  code            String       @unique // e.g., "BTECH_CSE"
+  name            String                // e.g., "B.Tech Computer Science"
+  shortName       String                // e.g., "B.Tech CSE"
+  degreeType      String                // e.g., "Bachelor of Technology"
+  durationYears   Int          @default(4)
+  totalSemesters  Int          @default(8)
+  totalCredits    Int          @default(160)
+  
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  // Relations
+  students        Student[]
+  curricula       Curriculum[]
+  
+  @@map("programs")
+}
+
+model Curriculum {
+  id              String           @id @default(cuid())
+  programId       String
+  version         String           // e.g., "2020", "2021-R1"
+  batch           String           // e.g., "2020-2024"
+  
+  name            String           // e.g., "B.Tech CSE Curriculum 2020"
+  description     String?
+  
+  status          CurriculumStatus @default(DRAFT)
+  totalCredits    Int              @default(0)
+  
+  // Document hash for verification
+  documentHash    String?
+  
+  // Approval
+  approvedBy      String?
+  approvedAt      DateTime?
+  approvalNote    String?
+  
+  // Timestamps
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  // Relations
+  program         Program          @relation(fields: [programId], references: [id])
+  semesters       CurriculumSemester[]
+  students        Student[]
+  
+  @@unique([programId, version, batch])
+  @@index([status])
+  @@map("curricula")
+}
+
+model CurriculumSemester {
+  id              String       @id @default(cuid())
+  curriculumId    String
+  semesterNumber  Int
+  
+  minCredits      Int          @default(0)
+  maxCredits      Int          @default(30)
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  // Relations
+  curriculum      Curriculum   @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  courses         Course[]
+  
+  @@unique([curriculumId, semesterNumber])
+  @@map("curriculum_semesters")
+}
+
+model Course {
+  id                  String             @id @default(cuid())
+  curriculumSemesterId String
+  
+  code                String             // e.g., "CS301"
+  name                String             // e.g., "Data Structures"
+  shortName           String?            // e.g., "DS"
+  
+  credits             Int                @default(3)
+  lectureHours        Int                @default(3)  // L
+  tutorialHours       Int                @default(1)  // T
+  practicalHours      Int                @default(0)  // P
+  
+  type                CourseType         @default(MANDATORY)
+  isActive            Boolean            @default(true)
+  
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  
+  // Relations
+  curriculumSemester  CurriculumSemester @relation(fields: [curriculumSemesterId], references: [id], onDelete: Cascade)
+  courseResults       CourseResult[]
+  
+  @@unique([curriculumSemesterId, code])
+  @@index([code])
+  @@map("courses")
+}
+
+// ===========================================
+// RESULTS & GRADES
+// ===========================================
+
+model SemesterResult {
+  id              String       @id @default(cuid())
+  studentId       String
+  semester        Int
+  academicYear    String       // e.g., "2023-24"
+  
+  // Calculated values
+  sgpa            Float?
+  cgpa            Float?
+  totalCredits    Int          @default(0)
+  earnedCredits   Int          @default(0)
+  
+  // Status workflow
+  status          ResultStatus @default(DRAFT)
+  
+  // Review/Approval
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  approvedBy      String?
+  approvedAt      DateTime?
+  approvalNote    String?
+  
+  // Override (if credits check bypassed)
+  isOverridden    Boolean      @default(false)
+  overrideReason  String?
+  overriddenBy    String?
+  
+  // PDF & Document
+  pdfUrl          String?      // Temporary draft PDF
+  documentHash    String?      // Hash of final PDF
+  
+  // Timestamps
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  // Relations
+  student         Student      @relation(fields: [studentId], references: [id])
+  courseResults   CourseResult[]
+  credential      Credential?
+  
+  @@unique([studentId, semester, academicYear])
+  @@index([status])
+  @@index([semester])
+  @@map("semester_results")
+}
+
+model CourseResult {
+  id              String       @id @default(cuid())
+  semesterResultId String
+  studentId       String
+  courseId        String
+  
+  // Grade info
+  grade           String       // e.g., "A+", "B", "F"
+  gradePoints     Float        // e.g., 10, 8, 0
+  credits         Int
+  earnedCredits   Int          // 0 if failed, credits if passed
+  
+  // Optional marks (if stored)
+  internalMarks   Float?
+  externalMarks   Float?
+  totalMarks      Float?
+  
+  // Attendance (if tracked)
+  attendance      Float?       // Percentage
+  
+  // Version for revaluation
+  version         Int          @default(1)
+  isActive        Boolean      @default(true) // Only one active version per course
+  previousVersion String?      // Link to previous version ID
+  
+  // Timestamps
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  // Relations
+  semesterResult  SemesterResult @relation(fields: [semesterResultId], references: [id], onDelete: Cascade)
+  student         Student        @relation(fields: [studentId], references: [id])
+  course          Course         @relation(fields: [courseId], references: [id])
+  
+  @@index([studentId, courseId, isActive])
+  @@map("course_results")
+}
+
+// ===========================================
+// CREDENTIALS & BLOCKCHAIN
+// ===========================================
+
+model Credential {
+  id                String           @id @default(cuid())
+  studentId         String
+  
+  type              CredentialType
+  status            CredentialStatus @default(PENDING)
+  
+  // Reference to source
+  semesterResultId  String?          @unique // For semester credentials
+  degreeProposalId  String?          @unique // For degree credentials
+  
+  // Document
+  documentHash      String           // SHA-256 hash of PDF
+  pdfUrl            String?          // URL to PDF
+  
+  // Blockchain
+  tokenId           String?          // NFT token ID
+  contractAddress   String?          // NFT contract address
+  txHash            String?          // Minting transaction hash
+  blockNumber       Int?
+  chainId           Int?
+  
+  // Metadata stored on-chain
+  metadata          Json?            // JSON metadata for NFT
+  
+  // Revocation
+  revokedAt         DateTime?
+  revokedBy         String?
+  revokeReason      String?
+  replacedById      String?          @unique // Link to replacement credential
+  
+  // Timestamps
+  issuedAt          DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  // Relations
+  student           Student          @relation(fields: [studentId], references: [id])
+  semesterResult    SemesterResult?  @relation(fields: [semesterResultId], references: [id])
+  degreeProposal    DegreeProposal?  @relation(fields: [degreeProposalId], references: [id])
+  shareLinks        ShareLink[]
+  replacedBy        Credential?      @relation("CredentialReplacement", fields: [replacedById], references: [id])
+  replaces          Credential?      @relation("CredentialReplacement")
+  
+  @@index([studentId])
+  @@index([tokenId])
+  @@index([documentHash])
+  @@index([status])
+  @@map("credentials")
+}
+
+// ===========================================
+// APPROVALS & WORKFLOWS
+// ===========================================
+
+model Approval {
+  id              String         @id @default(cuid())
+  
+  type            ApprovalType
+  status          ApprovalStatus @default(PENDING)
+  
+  // What is being approved
+  entityType      String         // "SemesterResult", "Curriculum", "DegreeProposal", "CorrectionRequest"
+  entityId        String
+  
+  // Approver
+  approverId      String?
+  approverRole    Role?
+  
+  // Decision
+  note            String?
+  decidedAt       DateTime?
+  
+  // For multi-step approvals
+  step            Int            @default(1)
+  requiredRole    Role?          // Role required for this step
+  
+  // Timestamps
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  // Relations
+  approver        User?          @relation("ApprovalApprover", fields: [approverId], references: [id])
+  
+  @@index([entityType, entityId])
+  @@index([status])
+  @@map("approvals")
+}
+
+model DegreeProposal {
+  id              String               @id @default(cuid())
+  studentId       String
+  
+  // Proposal info
+  expectedYear    Int
+  notes           String?
+  
+  // Validation
+  totalCredits    Int
+  cgpa            Float
+  hasBacklogs     Boolean              @default(false)
+  validationPassed Boolean             @default(false)
+  validationErrors Json?               // Array of validation error messages
+  
+  // Workflow status
+  status          DegreeProposalStatus @default(DRAFT)
+  
+  // Academic approval
+  academicApproverId   String?
+  academicApprovedAt   DateTime?
+  academicNote         String?
+  
+  // Admin approval (final)
+  adminApproverId      String?
+  adminApprovedAt      DateTime?
+  adminNote            String?
+  
+  // Rejection
+  rejectedBy           String?
+  rejectedAt           DateTime?
+  rejectionReason      String?
+  
+  // Timestamps
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  
+  // Relations
+  student         Student              @relation(fields: [studentId], references: [id])
+  credential      Credential?
+  
+  @@index([studentId])
+  @@index([status])
+  @@map("degree_proposals")
+}
+
+model CorrectionRequest {
+  id              String           @id @default(cuid())
+  studentId       String
+  requesterId     String           // User who requested
+  
+  // What is being corrected
+  entityType      String           // "CourseResult", "SemesterResult"
+  entityId        String
+  
+  // Correction details
+  field           String           // Field being corrected, e.g., "grade"
+  oldValue        String
+  newValue        String
+  reason          String
+  supportingDocs  String[]         // Array of document URLs
+  
+  // Status
+  status          CorrectionStatus @default(PENDING)
+  
+  // Processing
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  reviewNote      String?
+  
+  // If credential exists, track replacement
+  originalCredentialId String?
+  newCredentialId      String?
+  
+  // Timestamps
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  // Relations
+  student         Student          @relation("CorrectionStudent", fields: [studentId], references: [id])
+  requester       User             @relation("CorrectionRequester", fields: [requesterId], references: [id])
+  
+  @@index([studentId])
+  @@index([status])
+  @@map("correction_requests")
+}
+
+// ===========================================
+// SHARING & VERIFICATION
+// ===========================================
+
+model ShareLink {
+  id              String       @id @default(cuid())
+  studentId       String
+  credentialId    String
+  
+  // Link
+  token           String       @unique // Short unique token for URL
+  
+  // Expiry
+  expiresAt       DateTime?
+  
+  // Usage tracking
+  viewCount       Int          @default(0)
+  lastViewedAt    DateTime?
+  
+  // Status
+  isActive        Boolean      @default(true)
+  revokedAt       DateTime?
+  
+  // Timestamps
+  createdAt       DateTime     @default(now())
+  
+  // Relations
+  student         Student      @relation(fields: [studentId], references: [id])
+  credential      Credential   @relation(fields: [credentialId], references: [id])
+  
+  @@index([token])
+  @@index([credentialId])
+  @@map("share_links")
+}
+
+// ===========================================
+// JOBS & BACKGROUND PROCESSING
+// ===========================================
+
+model Job {
+  id              String     @id @default(cuid())
+  type            JobType
+  status          JobStatus  @default(QUEUED)
+  
+  // Input/Output
+  input           Json?      // Job input data
+  output          Json?      // Job result data
+  error           String?    // Error message if failed
+  
+  // Progress tracking
+  progress        Int        @default(0) // 0-100
+  totalItems      Int        @default(0)
+  processedItems  Int        @default(0)
+  failedItems     Int        @default(0)
+  
+  // Timing
+  startedAt       DateTime?
+  completedAt     DateTime?
+  
+  // Queue info
+  queueName       String?
+  bullJobId       String?    // BullMQ job ID
+  
+  // Actor
+  createdBy       String?
+  
+  // Timestamps
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  @@index([type, status])
+  @@index([bullJobId])
+  @@map("jobs")
+}
+
+// ===========================================
+// AUDIT & LOGGING
+// ===========================================
+
+model AuditLog {
+  id              String      @id @default(cuid())
+  
+  action          AuditAction
+  actorId         String?
+  actorRole       Role?
+  
+  // What was affected
+  entityType      String?     // e.g., "Student", "SemesterResult"
+  entityId        String?
+  
+  // Details
+  description     String?
+  metadata        Json?       // Additional context
+  
+  // Request info
+  ipAddress       String?
+  userAgent       String?
+  
+  // Timestamp (immutable)
+  createdAt       DateTime    @default(now())
+  
+  // Relations
+  actor           User?       @relation("AuditActor", fields: [actorId], references: [id])
+  
+  @@index([action])
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ===========================================
+// SETTINGS & CONFIGURATION
+// ===========================================
+
+model ApprovalSettings {
+  id              String       @id @default(cuid())
+  type            ApprovalType @unique
+  requiredLevels  Int          @default(2)
+  levelNames      String[]     @default([])
+  isActive        Boolean      @default(true)
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  @@map("approval_settings")
+}
+
+model CollegeSettings {
+  id              String   @id @default("default")
+  
+  // College Info
+  name            String   @default("ABV-IIITM Gwalior")
+  shortName       String   @default("IIITM")
+  fullName        String   @default("ABV-Indian Institute of Information Technology and Management Gwalior")
+  logoUrl         String?
+  websiteUrl      String?
+  
+  // Contact
+  address         String?
+  city            String?
+  state           String?
+  country         String   @default("India")
+  pincode         String?
+  phone           String?
+  email           String?
+  
+  // Blockchain Settings
+  chainId         Int      @default(11155111) // Sepolia
+  rpcUrl          String?
+  contractSemester String?  // Semester NFT contract address
+  contractDegree   String?  // Degree NFT contract address
+  
+  // Feature flags
+  degreeSoulbound Boolean  @default(true)
+  allowCorrections Boolean @default(true)
+  requireCreditValidation Boolean @default(true)
+  
+  // Grading System
+  gradingSystem   Json?    // Grade to point mapping
+  
+  // Timestamps
+  updatedAt       DateTime @updatedAt
+  
+  @@map("college_settings")
+}
+
+// ===========================================
+// GRADE CONFIGURATION
+// ===========================================
+
+model GradeScale {
+  id              String   @id @default(cuid())
+  
+  grade           String   // e.g., "A+", "A", "B+", etc.
+  gradePoints     Float    // e.g., 10, 9, 8
+  minMarks        Float?   // Minimum marks for this grade
+  maxMarks        Float?   // Maximum marks for this grade
+  description     String?  // e.g., "Outstanding"
+  isPassing       Boolean  @default(true)
+  
+  displayOrder    Int      @default(0)
+  isActive        Boolean  @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([grade])
+  @@map("grade_scales")
+}
