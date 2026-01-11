@@ -1,33 +1,89 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { ActivityFeed } from "@/components/dashboard/activity-feed"
 import { useAuth } from "@/providers/auth-provider"
-import { Users, FileText, Award, AlertCircle, Upload, CheckSquare, BookOpen, ScrollText } from "lucide-react"
+import { useApi } from "@/hooks/use-api"
+import { Users, FileText, Award, AlertCircle, Upload, CheckSquare, BookOpen, ScrollText, Loader2 } from "lucide-react"
 import Link from "next/link"
 
-// Mock data
-const mockStats = {
-  totalStudents: 2450,
-  resultsPublished: 156,
-  credentialsIssued: 89,
-  activeShareLinks: 234,
-  pendingApprovals: 5,
-  pendingCorrections: 2,
+interface DashboardStats {
+  stats: {
+    totalStudents: number
+    activeStudents: number
+    resultsPublished: number
+    credentialsIssued: number
+    activeShares: number
+  }
+  pendingActions: {
+    results: number
+    degrees: number
+    corrections: number
+  }
+  recentActivity: Array<{
+    id: string
+    action: string
+    entityType: string
+    createdAt: string
+    actor?: { name: string; email: string }
+  }>
+}
+
+interface ApiResponse<T = unknown> {
+  success: boolean
+  data?: T
+  message?: string
 }
 
 const quickActions = [
   { title: "Upload Results", icon: Upload, href: "/admin/results/upload" },
-  { title: "Review Approvals", icon: CheckSquare, href: "/admin/approve", badge: 5 },
+  { title: "Review Approvals", icon: CheckSquare, href: "/admin/approve", badgeKey: "pendingApprovals" as const },
   { title: "Manage Curriculum", icon: BookOpen, href: "/admin/curriculum" },
   { title: "View Logs", icon: ScrollText, href: "/admin/logs" },
 ]
 
 export function AdminDashboard() {
   const { user } = useAuth()
+  const api = useApi()
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!api.isReady) return
+
+    async function fetchDashboardStats() {
+      try {
+        setIsLoading(true)
+        const data = await api.get<ApiResponse<DashboardStats>>("/dashboard/admin/stats")
+        
+        if (data.success) {
+          setStats(data.data ?? null)
+        }
+      } catch (err) {
+        console.error("Dashboard fetch error:", err)
+        setError("Failed to load dashboard data")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchDashboardStats()
+  }, [api.isReady])
+
+  const totalPending = stats ? stats.pendingActions.results + stats.pendingActions.degrees + stats.pendingActions.corrections : 0
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -48,7 +104,7 @@ export function AdminDashboard() {
       </div>
 
       {/* Pending Actions Alert */}
-      {(mockStats.pendingApprovals > 0 || mockStats.pendingCorrections > 0) && (
+      {totalPending > 0 && (
         <Card className="border-warning/50 bg-warning/5">
           <CardContent className="p-4 flex items-center gap-4">
             <div className="h-10 w-10 rounded-full bg-warning/10 flex items-center justify-center shrink-0">
@@ -57,8 +113,7 @@ export function AdminDashboard() {
             <div className="flex-1">
               <h3 className="font-semibold">Pending Actions Required</h3>
               <p className="text-sm text-muted-foreground">
-                {mockStats.pendingApprovals} results awaiting approval, {mockStats.pendingCorrections} correction
-                requests
+                {stats?.pendingActions.results || 0} results, {stats?.pendingActions.degrees || 0} degree proposals, {stats?.pendingActions.corrections || 0} corrections
               </p>
             </div>
             <Button asChild size="sm">
@@ -72,28 +127,28 @@ export function AdminDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Students"
-          value={mockStats.totalStudents.toLocaleString()}
+          value={stats?.stats.totalStudents?.toLocaleString() || "0"}
           icon={Users}
           description="Enrolled students"
           href="/admin/students"
         />
         <StatCard
           title="Results Published"
-          value={mockStats.resultsPublished}
+          value={stats?.stats.resultsPublished || 0}
           icon={FileText}
-          description="This semester"
+          description="Total published"
           href="/admin/results/upload"
         />
         <StatCard
           title="Credentials Issued"
-          value={mockStats.credentialsIssued}
+          value={stats?.stats.credentialsIssued || 0}
           icon={Award}
-          description="This month"
+          description="Total issued"
           href="/admin/issuance"
         />
         <StatCard
           title="Pending Approvals"
-          value={mockStats.pendingApprovals}
+          value={totalPending}
           icon={CheckSquare}
           description="Requires attention"
           href="/admin/approve"
@@ -118,12 +173,12 @@ export function AdminDashboard() {
                 <Link href={action.href}>
                   <action.icon className="h-5 w-5" />
                   <span className="text-xs font-medium">{action.title}</span>
-                  {action.badge && (
+                  {action.badgeKey === "pendingApprovals" && totalPending > 0 && (
                     <Badge
                       variant="destructive"
                       className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs"
                     >
-                      {action.badge}
+                      {totalPending}
                     </Badge>
                   )}
                 </Link>
@@ -139,7 +194,7 @@ export function AdminDashboard() {
             <CardDescription>Latest system activities and changes</CardDescription>
           </CardHeader>
           <CardContent>
-            <ActivityFeed />
+            <ActivityFeed activities={stats?.recentActivity || []} />
           </CardContent>
         </Card>
       </div>
@@ -150,26 +205,23 @@ export function AdminDashboard() {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Results Overview</CardTitle>
-            <CardDescription>Current semester status</CardDescription>
+            <CardDescription>Current status summary</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {[
-                { label: "Published", value: 156, total: 200, color: "bg-success" },
-                { label: "Pending Approval", value: 5, total: 200, color: "bg-warning" },
-                { label: "Draft", value: 39, total: 200, color: "bg-muted" },
+                { label: "Published", value: stats?.stats.resultsPublished || 0, color: "bg-success" },
+                { label: "Pending Approval", value: stats?.pendingActions.results || 0, color: "bg-warning" },
               ].map((item) => (
                 <div key={item.label} className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>{item.label}</span>
-                    <span className="font-medium">
-                      {item.value} / {item.total}
-                    </span>
+                    <span className="font-medium">{item.value}</span>
                   </div>
                   <div className="h-2 rounded-full bg-muted overflow-hidden">
                     <div
                       className={`h-full ${item.color} transition-all`}
-                      style={{ width: `${(item.value / item.total) * 100}%` }}
+                      style={{ width: item.value > 0 ? "100%" : "0%" }}
                     />
                   </div>
                 </div>
@@ -187,24 +239,24 @@ export function AdminDashboard() {
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-4 rounded-lg bg-muted/50">
-                <p className="text-sm text-muted-foreground">Degrees Issued</p>
-                <p className="text-3xl font-bold text-primary">89</p>
-                <p className="text-xs text-muted-foreground mt-1">This year</p>
+                <p className="text-sm text-muted-foreground">Credentials Issued</p>
+                <p className="text-3xl font-bold text-primary">{stats?.stats.credentialsIssued || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">Total</p>
               </div>
               <div className="text-center p-4 rounded-lg bg-muted/50">
-                <p className="text-sm text-muted-foreground">Verifications</p>
-                <p className="text-3xl font-bold">1,234</p>
-                <p className="text-xs text-muted-foreground mt-1">Total checks</p>
+                <p className="text-sm text-muted-foreground">Active Students</p>
+                <p className="text-3xl font-bold">{stats?.stats.activeStudents || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">Currently enrolled</p>
               </div>
               <div className="text-center p-4 rounded-lg bg-muted/50">
-                <p className="text-sm text-muted-foreground">Active Links</p>
-                <p className="text-3xl font-bold">234</p>
-                <p className="text-xs text-muted-foreground mt-1">Share links</p>
+                <p className="text-sm text-muted-foreground">Active Share Links</p>
+                <p className="text-3xl font-bold">{stats?.stats.activeShares || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">Shared credentials</p>
               </div>
               <div className="text-center p-4 rounded-lg bg-muted/50">
-                <p className="text-sm text-muted-foreground">Pending</p>
-                <p className="text-3xl font-bold text-warning">12</p>
-                <p className="text-xs text-muted-foreground mt-1">Degree proposals</p>
+                <p className="text-sm text-muted-foreground">Pending Degrees</p>
+                <p className="text-3xl font-bold text-warning">{stats?.pendingActions.degrees || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">Awaiting approval</p>
               </div>
             </div>
           </CardContent>

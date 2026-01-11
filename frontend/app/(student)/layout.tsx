@@ -1,16 +1,10 @@
+"use client"
+
 import type React from "react"
-import type { Metadata } from "next"
 import { StudentSidebar } from "@/components/layout/student-sidebar"
 import { Topbar } from "@/components/layout/topbar"
 import { MobileNav } from "@/components/layout/mobile-nav"
 import { studentNavigation } from "@/config/navigation"
-
-export const metadata: Metadata = {
-  title: {
-    default: "Student Portal",
-    template: "%s | Student Portal | PARAM",
-  },
-}
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -6,22 +6,37 @@ import { cn } from "@/lib/utils"
 import { adminNavigation, type NavItem } from "@/config/navigation"
 import { ChevronDown } from "lucide-react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
+import { useApi } from "@/hooks/use-api"
 
 interface AdminSidebarProps {
   className?: string
 }
 
-// Mock badge counts - in production would come from API
-const badgeCounts: Record<string, number> = {
-  "/admin/approve": 5,
-  "/admin/corrections": 2,
-}
-
 export function AdminSidebar({ className }: AdminSidebarProps) {
   const pathname = usePathname()
+  const api = useApi()
   const [openItems, setOpenItems] = useState<string[]>([])
+  const [badgeCounts, setBadgeCounts] = useState<Record<string, number>>({})
+
+  // Fetch badge counts from API
+  useEffect(() => {
+    if (!api.isReady) return
+
+    async function fetchBadgeCounts() {
+      try {
+        const data = await api.get("/dashboard/admin/counts")
+        if (data.success) {
+          setBadgeCounts(data.data || {})
+        }
+      } catch (err) {
+        console.error("Error fetching badge counts:", err)
+      }
+    }
+
+    fetchBadgeCounts()
+  }, [api.isReady])
 
   const toggleItem = (href: string) => {
     setOpenItems((prev) => (prev.includes(href) ? prev.filter((h) => h !== href) : [...prev, href]))

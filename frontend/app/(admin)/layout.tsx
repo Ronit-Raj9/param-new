@@ -1,16 +1,10 @@
+"use client"
+
 import type React from "react"
-import type { Metadata } from "next"
 import { AdminSidebar } from "@/components/layout/admin-sidebar"
 import { Topbar } from "@/components/layout/topbar"
 import { MobileNav } from "@/components/layout/mobile-nav"
 import { adminNavigation } from "@/config/navigation"
-
-export const metadata: Metadata = {
-  title: {
-    default: "Admin Portal",
-    template: "%s | Admin Portal | PARAM",
-  },
-}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
