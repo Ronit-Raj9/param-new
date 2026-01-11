@@ -10,7 +10,7 @@ export const privyConfig: PrivyClientConfig = {
   appearance: {
     theme: "light",
     accentColor: "#0b3d91",
-    logo: "/images/logo/iiitm-logo.svg",
+    logo: "/placeholder-logo.svg",
     
     showWalletLoginFirst: false,
     
@@ -122,8 +122,8 @@ export const authConfig = {
   // Session timeout (in milliseconds)
   sessionTimeout: 24 * 60 * 60 * 1000, // 24 hours
 
-  // Allowed email domains
-  allowedEmailDomains: ["iiitm.ac.in", "iiitm.edu.in"],
+  // Allowed email domains (empty array = all domains allowed)
+  allowedEmailDomains: [],
 
   // OAuth providers
   oauthProviders: {
@@ -144,6 +144,9 @@ export const authConfig = {
  * Validate email domain
  */
 export function isValidInstitutionalEmail(email: string): boolean {
+  // If no domains specified, allow all
+  if (authConfig.allowedEmailDomains.length === 0) return true
+  
   const domain = email.split("@")[1]?.toLowerCase()
   return authConfig.allowedEmailDomains.includes(domain)
 }
