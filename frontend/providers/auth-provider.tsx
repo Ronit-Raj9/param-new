@@ -46,10 +46,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = await getAccessToken()
       
       if (!token) {
-        console.error("Failed to get Privy access token")
+        console.error("❌ Failed to get Privy access token")
         setBackendUser(null)
         return
       }
+
+      console.log("🔄 Syncing with backend at:", `${API_URL}/v1/auth/login`)
 
       // Call backend login endpoint with Privy token
       const response = await fetch(`${API_URL}/v1/auth/login`, {
@@ -63,7 +65,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        console.error("Backend auth failed:", errorData)
+        console.error("❌ Backend auth failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        })
         setBackendUser(null)
         return
       }
@@ -71,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json()
       
       if (data.success && data.data?.user) {
+        console.log("✅ Backend sync successful:", data.data.user.email)
         setBackendUser(data.data.user)
         
         // Set cookies for middleware route protection
@@ -79,10 +86,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         setHasSynced(true)
       } else {
+        console.error("❌ Backend response missing user data:", data)
         setBackendUser(null)
       }
     } catch (error) {
-      console.error("Error syncing with backend:", error)
+      console.error("❌ Error syncing with backend:", error)
+      console.error("💡 Make sure the backend is running at:", API_URL)
+      console.error("💡 Check the browser console Network tab for details")
       setBackendUser(null)
     } finally {
       setIsLoading(false)
