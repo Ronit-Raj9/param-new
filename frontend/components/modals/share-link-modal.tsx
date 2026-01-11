@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
+import { useApi } from "@/hooks/use-api"
 import { SHARE_EXPIRY_OPTIONS } from "@/lib/constants"
 import { Copy, Loader2, CheckCircle2 } from "lucide-react"
 
@@ -18,6 +19,7 @@ interface CreateShareLinkModalProps {
 
 export function CreateShareLinkModal({ open, onClose, credentialId }: CreateShareLinkModalProps) {
   const { toast } = useToast()
+  const api = useApi()
   const [expiry, setExpiry] = useState("30")
   const [isLoading, setIsLoading] = useState(false)
   const [generatedLink, setGeneratedLink] = useState<string | null>(null)
@@ -25,10 +27,16 @@ export function CreateShareLinkModal({ open, onClose, credentialId }: CreateShar
   const handleCreate = async () => {
     setIsLoading(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      // In production: POST /api/student/shares { credentialId, expiryDays: expiry === 'never' ? null : parseInt(expiry) }
-      const mockLink = `https://param.iiitm.ac.in/verify/${Math.random().toString(36).slice(2, 10)}`
-      setGeneratedLink(mockLink)
+      const data = await api.post("/credentials/share-links", {
+        credentialId,
+        expiryDays: expiry === "never" ? null : parseInt(expiry),
+      })
+
+      if (data.success && data.data?.url) {
+        setGeneratedLink(data.data.url)
+      } else {
+        throw new Error("Invalid response")
+      }
     } catch {
       toast({
         title: "Error",

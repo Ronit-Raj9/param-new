@@ -6,29 +6,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Separator } from "@/components/ui/separator"
 import { GradeBadge } from "@/components/results/grade-badge"
 import { formatGPA, formatDate } from "@/lib/format"
-import { Download, Share2 } from "lucide-react"
-import type { SemesterResult } from "@/types"
+import { Download, Share2, FileText } from "lucide-react"
+import type { SemesterResult, SubjectResult } from "@/types"
 
 interface ResultDetailModalProps {
   result: SemesterResult | null
-  onClose: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
-// Mock subject data
-const mockSubjects = [
-  { id: "1", courseCode: "CS401", courseName: "Machine Learning", credits: 4, grade: "A+", gradePoints: 10 },
-  { id: "2", courseCode: "CS402", courseName: "Computer Networks", credits: 4, grade: "A", gradePoints: 9 },
-  { id: "3", courseCode: "CS403", courseName: "Database Systems", credits: 4, grade: "A+", gradePoints: 10 },
-  { id: "4", courseCode: "CS404", courseName: "Software Engineering", credits: 3, grade: "B+", gradePoints: 8 },
-  { id: "5", courseCode: "HS401", courseName: "Technical Writing", credits: 2, grade: "A", gradePoints: 9 },
-  { id: "6", courseCode: "CS491", courseName: "Project Work", credits: 3, grade: "A+", gradePoints: 10 },
-]
-
-export function ResultDetailModal({ result, onClose }: ResultDetailModalProps) {
+export function ResultDetailModal({ result, open, onOpenChange }: ResultDetailModalProps) {
   if (!result) return null
 
+  const subjects: SubjectResult[] = result.subjects || []
+
   return (
-    <Dialog open={!!result} onOpenChange={() => onClose()}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Semester {result.semester} Result</DialogTitle>
@@ -60,43 +53,50 @@ export function ResultDetailModal({ result, onClose }: ResultDetailModalProps) {
         {/* Subject-wise Marks */}
         <div>
           <h4 className="font-semibold mb-3">Subject-wise Performance</h4>
-          <div className="rounded-lg border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead className="text-center">Credits</TableHead>
-                  <TableHead className="text-center">Grade</TableHead>
-                  <TableHead className="text-center">Points</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {mockSubjects.map((subject) => (
-                  <TableRow key={subject.id}>
-                    <TableCell className="font-mono text-sm">{subject.courseCode}</TableCell>
-                    <TableCell>{subject.courseName}</TableCell>
-                    <TableCell className="text-center">{subject.credits}</TableCell>
-                    <TableCell className="text-center">
-                      <GradeBadge grade={subject.grade} />
-                    </TableCell>
-                    <TableCell className="text-center">{subject.gradePoints}</TableCell>
+          {subjects.length > 0 ? (
+            <div className="rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Subject</TableHead>
+                    <TableHead className="text-center">Credits</TableHead>
+                    <TableHead className="text-center">Grade</TableHead>
+                    <TableHead className="text-center">Points</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {subjects.map((subject) => (
+                    <TableRow key={subject.id}>
+                      <TableCell className="font-mono text-sm">{subject.courseCode}</TableCell>
+                      <TableCell>{subject.courseName}</TableCell>
+                      <TableCell className="text-center">{subject.credits}</TableCell>
+                      <TableCell className="text-center">
+                        <GradeBadge grade={subject.grade} />
+                      </TableCell>
+                      <TableCell className="text-center">{subject.gradePoints}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center border rounded-lg">
+              <FileText className="h-10 w-10 text-muted-foreground mb-3" />
+              <p className="text-sm text-muted-foreground">Subject details not available</p>
+            </div>
+          )}
         </div>
 
         <Separator />
 
         {/* Actions */}
         <div className="flex gap-3 justify-end">
-          <Button variant="outline" disabled={result.status !== "PUBLISHED"} className="bg-transparent">
+          <Button variant="outline" disabled={result.status === "DRAFT" || result.status === "WITHHELD"} className="bg-transparent">
             <Share2 className="mr-2 h-4 w-4" />
             Share Result
           </Button>
-          <Button disabled={result.status !== "PUBLISHED"}>
+          <Button disabled={result.status === "DRAFT" || result.status === "WITHHELD"}>
             <Download className="mr-2 h-4 w-4" />
             Download PDF
           </Button>
