@@ -1,135 +1,102 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { StatusBadge } from "@/components/status/status-badge"
 import { ResultDetailModal } from "@/components/modals/result-detail-modal"
+import { useApi } from "@/hooks/use-api"
 import { formatGPA } from "@/lib/format"
-import { Download, Share2, Eye } from "lucide-react"
+import { Download, Share2, Eye, Loader2, FileText, CheckCircle2, Clock, ExternalLink } from "lucide-react"
 import type { SemesterResult } from "@/types"
 
-// Mock data
-const mockResults: SemesterResult[] = [
-  {
-    id: "sem-8",
-    studentId: "1",
-    semester: 8,
-    academicYear: "2023-24",
-    sgpa: 8.8,
-    cgpa: 8.75,
-    totalCredits: 18,
-    earnedCredits: 18,
-    status: "PUBLISHED",
-    subjects: [],
-    publishedAt: "2024-06-15T10:00:00Z",
-    createdAt: "2024-05-01T10:00:00Z",
-    updatedAt: "2024-06-15T10:00:00Z",
-  },
-  {
-    id: "sem-7",
-    studentId: "1",
-    semester: 7,
-    academicYear: "2023-24",
-    sgpa: 9.0,
-    cgpa: 8.72,
-    totalCredits: 20,
-    earnedCredits: 20,
-    status: "PUBLISHED",
-    subjects: [],
-    publishedAt: "2024-01-15T10:00:00Z",
-    createdAt: "2023-12-01T10:00:00Z",
-    updatedAt: "2024-01-15T10:00:00Z",
-  },
-  {
-    id: "sem-6",
-    studentId: "1",
-    semester: 6,
-    academicYear: "2022-23",
-    sgpa: 8.7,
-    cgpa: 8.65,
-    totalCredits: 22,
-    earnedCredits: 22,
-    status: "PUBLISHED",
-    subjects: [],
-    publishedAt: "2023-06-15T10:00:00Z",
-    createdAt: "2023-05-01T10:00:00Z",
-    updatedAt: "2023-06-15T10:00:00Z",
-  },
-  {
-    id: "sem-5",
-    studentId: "1",
-    semester: 5,
-    academicYear: "2022-23",
-    sgpa: 8.9,
-    cgpa: 8.6,
-    totalCredits: 22,
-    earnedCredits: 22,
-    status: "PUBLISHED",
-    subjects: [],
-    publishedAt: "2023-01-15T10:00:00Z",
-    createdAt: "2022-12-01T10:00:00Z",
-    updatedAt: "2023-01-15T10:00:00Z",
-  },
-  {
-    id: "sem-4",
-    studentId: "1",
-    semester: 4,
-    academicYear: "2021-22",
-    sgpa: 8.8,
-    cgpa: 8.55,
-    totalCredits: 24,
-    earnedCredits: 24,
-    status: "PUBLISHED",
-    subjects: [],
-    publishedAt: "2022-06-15T10:00:00Z",
-    createdAt: "2022-05-01T10:00:00Z",
-    updatedAt: "2022-06-15T10:00:00Z",
-  },
-]
-
 export function ResultsList() {
+  const api = useApi()
+  const [results, setResults] = useState<SemesterResult[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [sortOrder, setSortOrder] = useState<string>("desc")
   const [selectedResult, setSelectedResult] = useState<SemesterResult | null>(null)
 
-  const filteredResults = mockResults
+  useEffect(() => {
+    async function fetchResults() {
+      if (!api.isReady) return
+      
+      try {
+        setIsLoading(true)
+        const data = await api.get<{ success: boolean; data: SemesterResult[] }>("/v1/results/my-results")
+
+        if (data.success) {
+          setResults(data.data || [])
+        }
+      } catch (err) {
+        console.error("Error fetching results:", err)
+        setResults([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchResults()
+  }, [api.isReady])
+
+  const filteredResults = results
     .filter((result) => statusFilter === "all" || result.status === statusFilter)
     .sort((a, b) => {
-      const order = sortOrder === "desc" ? -1 : 1
-      return (a.semester - b.semester) * order
+      return sortOrder === "desc" ? b.semester - a.semester : a.semester - b.semester
     })
 
   return (
-    <>
-      <Card>
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <CardTitle>Semester Results</CardTitle>
-          <div className="flex gap-3">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="PUBLISHED">Published</SelectItem>
-                <SelectItem value="DRAFT">Draft</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={sortOrder} onValueChange={setSortOrder}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Sort" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="desc">Latest First</SelectItem>
-                <SelectItem value="asc">Oldest First</SelectItem>
-              </SelectContent>
-            </Select>
+    <Card>
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <CardTitle>Semester Results</CardTitle>
+        <div className="flex gap-3">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="PUBLISHED">Published</SelectItem>
+              <SelectItem value="DRAFT">Draft</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sortOrder} onValueChange={setSortOrder}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Sort" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Latest First</SelectItem>
+              <SelectItem value="asc">Oldest First</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        </CardHeader>
-        <CardContent>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && filteredResults.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium">No results found</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              {statusFilter !== "all" ? "Try a different status filter" : "Results will appear here once published"}
+            </p>
+          </div>
+        )}
+
+        {/* Results Table */}
+        {!isLoading && filteredResults.length > 0 && (
           <div className="rounded-lg border overflow-hidden">
             <Table>
               <TableHeader>
@@ -140,33 +107,77 @@ export function ResultsList() {
                   <TableHead className="text-center">CGPA</TableHead>
                   <TableHead className="text-center">Credits</TableHead>
                   <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">Blockchain</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredResults.map((result) => (
-                  <TableRow key={result.id} className="cursor-pointer hover:bg-muted/50">
+                  <TableRow key={result.id}>
                     <TableCell className="font-medium">Semester {result.semester}</TableCell>
                     <TableCell>{result.academicYear}</TableCell>
-                    <TableCell className="text-center font-medium">{formatGPA(result.sgpa)}</TableCell>
-                    <TableCell className="text-center">{formatGPA(result.cgpa)}</TableCell>
-                    <TableCell className="text-center">{result.earnedCredits}</TableCell>
+                    <TableCell className="text-center font-medium text-primary">
+                      {formatGPA(result.sgpa)}
+                    </TableCell>
+                    <TableCell className="text-center font-medium">{formatGPA(result.cgpa)}</TableCell>
+                    <TableCell className="text-center">
+                      {result.earnedCredits}/{result.totalCredits}
+                    </TableCell>
                     <TableCell className="text-center">
                       <StatusBadge status={result.status} />
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => setSelectedResult(result)}>
+                    <TableCell className="text-center">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            {result.credential?.tokenId ? (
+                              <Badge 
+                                variant="default" 
+                                className="bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
+                                onClick={() => {
+                                  if (result.credential?.txHash) {
+                                    window.open(`https://sepolia.basescan.org/tx/${result.credential.txHash}`, "_blank")
+                                  }
+                                }}
+                              >
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Minted
+                              </Badge>
+                            ) : result.status === "ISSUED" ? (
+                              <Badge variant="secondary" className="cursor-default">
+                                <Clock className="h-3 w-3 mr-1" />
+                                Pending
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="cursor-default">
+                                —
+                              </Badge>
+                            )}
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {result.credential?.tokenId 
+                              ? `Token ID: ${result.credential.tokenId}` 
+                              : result.status === "ISSUED" 
+                                ? "Waiting to be minted on blockchain"
+                                : "Not yet issued"}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setSelectedResult(result)}
+                        >
                           <Eye className="h-4 w-4" />
-                          <span className="sr-only">View details</span>
                         </Button>
-                        <Button variant="ghost" size="icon" disabled={result.status !== "PUBLISHED"}>
-                          <Download className="h-4 w-4" />
-                          <span className="sr-only">Download</span>
-                        </Button>
-                        <Button variant="ghost" size="icon" disabled={result.status !== "PUBLISHED"}>
+                        <Button variant="ghost" size="icon">
                           <Share2 className="h-4 w-4" />
-                          <span className="sr-only">Share</span>
+                        </Button>
+                        <Button variant="ghost" size="icon">
+                          <Download className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -175,10 +186,17 @@ export function ResultsList() {
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </CardContent>
 
-      <ResultDetailModal result={selectedResult} onClose={() => setSelectedResult(null)} />
-    </>
+      {/* Result Detail Modal */}
+      {selectedResult && (
+        <ResultDetailModal
+          result={selectedResult}
+          open={!!selectedResult}
+          onOpenChange={(open) => !open && setSelectedResult(null)}
+        />
+      )}
+    </Card>
   )
 }
