@@ -1,0 +1,781 @@
+{
+  "info": {
+    "_postman_id": "param-backend-api-collection-v1",
+    "name": "PARAM Backend API",
+    "description": "Complete API collection for PARAM - Academic Records Management System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:4000", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "student_id", "value": "", "type": "string" },
+    { "key": "user_id", "value": "", "type": "string" },
+    { "key": "credential_id", "value": "", "type": "string" },
+    { "key": "share_token", "value": "", "type": "string" },
+    { "key": "program_id", "value": "", "type": "string" },
+    { "key": "curriculum_id", "value": "", "type": "string" },
+    { "key": "course_id", "value": "", "type": "string" },
+    { "key": "result_id", "value": "", "type": "string" },
+    { "key": "approval_id", "value": "", "type": "string" },
+    { "key": "degree_proposal_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+      },
+      "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"status\":\"healthy\",\"timestamp\":\"2026-01-11T00:00:00.000Z\",\"uptime\":12345}}" }]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "const json = pm.response.json();", "if(json.data?.token) pm.collectionVariables.set('access_token', json.data.token);"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"token\": \"{{privy_auth_token}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/login", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "login"] }
+          },
+          "response": [
+            { "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"user\":{\"id\":\"clxyz123\",\"email\":\"admin@iiitm.ac.in\",\"name\":\"Admin\",\"role\":\"ADMIN\"},\"token\":\"eyJ...\"}}" },
+            { "name": "Invalid Token", "status": "Unauthorized", "code": 401, "body": "{\"success\":false,\"error\":{\"code\":\"INVALID_TOKEN\",\"message\":\"Invalid authentication token\"}}" }
+          ]
+        },
+        {
+          "name": "Get Current User",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "pm.test('Has user', () => pm.expect(pm.response.json().data).to.have.property('id'));"], "type": "text/javascript" } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/auth/me", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "me"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clxyz123\",\"email\":\"admin@iiitm.ac.in\",\"name\":\"Admin\",\"role\":\"ADMIN\",\"status\":\"ACTIVE\"}}" }]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/auth/logout", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "logout"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"message\":\"Logged out\"}}" }]
+        },
+        {
+          "name": "Link Wallet",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"address\": \"0x742d35Cc6634C0532925a3b844Bc9e7595f3B123\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/wallet", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "wallet"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"walletAddress\":\"0x742d35Cc6634C0532925a3b844Bc9e7595f3B123\"}}" }]
+        },
+        {
+          "name": "Register User (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"newuser@iiitm.ac.in\",\n  \"name\": \"New User\",\n  \"role\": \"ACADEMIC\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/register", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "register"] }
+          },
+          "response": [{ "name": "Success", "status": "Created", "code": 201, "body": "{\"success\":true,\"data\":{\"id\":\"clnew001\",\"email\":\"newuser@iiitm.ac.in\",\"name\":\"New User\",\"role\":\"ACADEMIC\"}}" }]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get User Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/users/stats", "host": ["{{base_url}}"], "path": ["api", "v1", "users", "stats"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"total\":50,\"byRole\":{\"ADMIN\":2,\"ACADEMIC\":10,\"STUDENT\":38},\"byStatus\":{\"ACTIVE\":45,\"PENDING\":5}}}" }]
+        },
+        {
+          "name": "List Users",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "const json = pm.response.json();", "if(json.data?.items?.[0]) pm.collectionVariables.set('user_id', json.data.items[0].id);"], "type": "text/javascript" } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/users?page=1&limit=20", "host": ["{{base_url}}"], "path": ["api", "v1", "users"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }, { "key": "role", "value": "ACADEMIC", "disabled": true }, { "key": "status", "value": "ACTIVE", "disabled": true }, { "key": "search", "value": "", "disabled": true }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"clusr001\",\"email\":\"user@iiitm.ac.in\",\"name\":\"User\",\"role\":\"ACADEMIC\",\"status\":\"ACTIVE\"}],\"total\":50,\"page\":1,\"limit\":20}}" }]
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"faculty@iiitm.ac.in\",\n  \"name\": \"Faculty Member\",\n  \"role\": \"ACADEMIC\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/users", "host": ["{{base_url}}"], "path": ["api", "v1", "users"] }
+          },
+          "response": [{ "name": "Success", "status": "Created", "code": 201, "body": "{\"success\":true,\"data\":{\"id\":\"clusr002\",\"email\":\"faculty@iiitm.ac.in\",\"name\":\"Faculty Member\",\"role\":\"ACADEMIC\",\"status\":\"PENDING_ACTIVATION\"}}" }]
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/users/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "users", ":id"], "variable": [{ "key": "id", "value": "{{user_id}}" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clusr001\",\"email\":\"user@iiitm.ac.in\",\"name\":\"User\",\"role\":\"ACADEMIC\",\"status\":\"ACTIVE\",\"createdAt\":\"2026-01-01T00:00:00.000Z\"}}" }]
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated Name\",\n  \"role\": \"ACADEMIC\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/users/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "users", ":id"], "variable": [{ "key": "id", "value": "{{user_id}}" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clusr001\",\"name\":\"Updated Name\",\"role\":\"ACADEMIC\"}}" }]
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/users/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "users", ":id"], "variable": [{ "key": "id", "value": "{{user_id}}" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"message\":\"User deleted\"}}" }]
+        },
+        {
+          "name": "Suspend User",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/users/:id/suspend", "host": ["{{base_url}}"], "path": ["api", "v1", "users", ":id", "suspend"], "variable": [{ "key": "id", "value": "{{user_id}}" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clusr001\",\"status\":\"SUSPENDED\"}}" }]
+        },
+        {
+          "name": "Activate User",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/users/:id/activate", "host": ["{{base_url}}"], "path": ["api", "v1", "users", ":id", "activate"], "variable": [{ "key": "id", "value": "{{user_id}}" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clusr001\",\"status\":\"ACTIVE\"}}" }]
+        }
+      ]
+    },
+    {
+      "name": "Students",
+      "item": [
+        {
+          "name": "Get My Profile (Student)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/students/me", "host": ["{{base_url}}"], "path": ["api", "v1", "students", "me"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clstud001\",\"enrollmentNumber\":\"2020BCS001\",\"name\":\"John Doe\",\"email\":\"john@iiitm.ac.in\",\"program\":{\"name\":\"B.Tech CS\"},\"batch\":\"2020-2024\",\"currentSemester\":6,\"status\":\"ACTIVE\"}}" }]
+        },
+        {
+          "name": "Get Student Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/students/stats", "host": ["{{base_url}}"], "path": ["api", "v1", "students", "stats"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"total\":500,\"byStatus\":{\"ACTIVE\":450,\"GRADUATED\":30,\"DROPPED_OUT\":20},\"byProgram\":{\"BTech\":300,\"MTech\":150,\"PhD\":50}}}" }]
+        },
+        {
+          "name": "List Students",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "const json = pm.response.json();", "if(json.data?.items?.[0]) pm.collectionVariables.set('student_id', json.data.items[0].id);"], "type": "text/javascript" } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/students?page=1&limit=20", "host": ["{{base_url}}"], "path": ["api", "v1", "students"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }, { "key": "programId", "value": "", "disabled": true }, { "key": "batch", "value": "", "disabled": true }, { "key": "status", "value": "ACTIVE", "disabled": true }, { "key": "search", "value": "", "disabled": true }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"clstud001\",\"enrollmentNumber\":\"2020BCS001\",\"name\":\"John Doe\",\"email\":\"john@iiitm.ac.in\",\"batch\":\"2020-2024\",\"status\":\"ACTIVE\"}],\"total\":500,\"page\":1,\"limit\":20}}" }]
+        },
+        {
+          "name": "Create Student",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"enrollmentNumber\": \"2024BCS001\",\n  \"name\": \"New Student\",\n  \"email\": \"newstudent@iiitm.ac.in\",\n  \"programId\": \"{{program_id}}\",\n  \"batch\": \"2024-2028\",\n  \"admissionYear\": 2024,\n  \"expectedGradYear\": 2028,\n  \"dateOfBirth\": \"2006-01-15T00:00:00.000Z\",\n  \"phone\": \"+91-9876543210\",\n  \"guardianName\": \"Parent Name\",\n  \"guardianPhone\": \"+91-9876543211\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/students", "host": ["{{base_url}}"], "path": ["api", "v1", "students"] }
+          },
+          "response": [{ "name": "Success", "status": "Created", "code": 201, "body": "{\"success\":true,\"data\":{\"id\":\"clstud002\",\"enrollmentNumber\":\"2024BCS001\",\"name\":\"New Student\",\"status\":\"PENDING_ACTIVATION\"}}" }]
+        },
+        {
+          "name": "Bulk Import Students",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"students\": [\n    {\n      \"enrollmentNumber\": \"2024BCS002\",\n      \"name\": \"Student Two\",\n      \"email\": \"student2@iiitm.ac.in\",\n      \"programId\": \"{{program_id}}\",\n      \"batch\": \"2024-2028\",\n      \"admissionYear\": 2024,\n      \"expectedGradYear\": 2028\n    },\n    {\n      \"enrollmentNumber\": \"2024BCS003\",\n      \"name\": \"Student Three\",\n      \"email\": \"student3@iiitm.ac.in\",\n      \"programId\": \"{{program_id}}\",\n      \"batch\": \"2024-2028\",\n      \"admissionYear\": 2024,\n      \"expectedGradYear\": 2028\n    }\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/students/bulk", "host": ["{{base_url}}"], "path": ["api", "v1", "students", "bulk"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"imported\":2,\"failed\":0,\"errors\":[]}}" }]
+        },
+        {
+          "name": "Get Student by Enrollment",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/students/enrollment/:enrollmentNo", "host": ["{{base_url}}"], "path": ["api", "v1", "students", "enrollment", ":enrollmentNo"], "variable": [{ "key": "enrollmentNo", "value": "2020BCS001" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clstud001\",\"enrollmentNumber\":\"2020BCS001\",\"name\":\"John Doe\"}}" }]
+        },
+        {
+          "name": "Get Student by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/students/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "students", ":id"], "variable": [{ "key": "id", "value": "{{student_id}}" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clstud001\",\"enrollmentNumber\":\"2020BCS001\",\"name\":\"John Doe\",\"email\":\"john@iiitm.ac.in\",\"program\":{\"id\":\"clprog001\",\"name\":\"B.Tech CS\"},\"batch\":\"2020-2024\",\"currentSemester\":6,\"status\":\"ACTIVE\",\"cgpa\":8.5}}" }]
+        },
+        {
+          "name": "Update Student",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"John Doe Updated\",\n  \"currentSemester\": 7,\n  \"phone\": \"+91-9876543212\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/students/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "students", ":id"], "variable": [{ "key": "id", "value": "{{student_id}}" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clstud001\",\"name\":\"John Doe Updated\",\"currentSemester\":7}}" }]
+        }
+      ]
+    },
+    {
+      "name": "Curriculum",
+      "item": [
+        {
+          "name": "Programs",
+          "item": [
+            {
+              "name": "List Programs",
+              "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "const json = pm.response.json();", "if(json.data?.items?.[0]) pm.collectionVariables.set('program_id', json.data.items[0].id);"], "type": "text/javascript" } }],
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/curriculum/programs?page=1&limit=20", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum", "programs"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }, { "key": "search", "value": "", "disabled": true }, { "key": "isActive", "value": "true", "disabled": true }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"clprog001\",\"name\":\"Bachelor of Technology\",\"code\":\"BTECH\",\"shortName\":\"B.Tech\",\"degreeType\":\"Bachelor\",\"durationYears\":4,\"totalSemesters\":8,\"totalCredits\":160}],\"total\":5,\"page\":1,\"limit\":20}}" }]
+            },
+            {
+              "name": "Get Program by ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/curriculum/programs/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum", "programs", ":id"], "variable": [{ "key": "id", "value": "{{program_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clprog001\",\"name\":\"Bachelor of Technology\",\"code\":\"BTECH\",\"shortName\":\"B.Tech\",\"degreeType\":\"Bachelor\",\"durationYears\":4,\"totalSemesters\":8,\"totalCredits\":160,\"isActive\":true}}" }]
+            },
+            {
+              "name": "Create Program (Admin)",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"name\": \"Master of Technology\",\n  \"code\": \"MTECH\",\n  \"shortName\": \"M.Tech\",\n  \"degreeType\": \"Master\",\n  \"durationYears\": 2,\n  \"totalSemesters\": 4,\n  \"totalCredits\": 64\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/curriculum/programs", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum", "programs"] }
+              },
+              "response": [{ "name": "Success", "status": "Created", "code": 201, "body": "{\"success\":true,\"data\":{\"id\":\"clprog002\",\"name\":\"Master of Technology\",\"code\":\"MTECH\",\"shortName\":\"M.Tech\"}}" }]
+            },
+            {
+              "name": "Update Program (Admin)",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"name\": \"Bachelor of Technology (Hons)\",\n  \"totalCredits\": 168\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/curriculum/programs/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum", "programs", ":id"], "variable": [{ "key": "id", "value": "{{program_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clprog001\",\"name\":\"Bachelor of Technology (Hons)\",\"totalCredits\":168}}" }]
+            }
+          ]
+        },
+        {
+          "name": "Curriculums",
+          "item": [
+            {
+              "name": "List Curriculums",
+              "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "const json = pm.response.json();", "if(json.data?.items?.[0]) pm.collectionVariables.set('curriculum_id', json.data.items[0].id);"], "type": "text/javascript" } }],
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/curriculum?page=1&limit=20", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }, { "key": "programId", "value": "", "disabled": true }, { "key": "status", "value": "ACTIVE", "disabled": true }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"clcurr001\",\"name\":\"B.Tech CS 2020\",\"version\":\"1.0\",\"batch\":\"2020-2024\",\"status\":\"ACTIVE\",\"totalCredits\":160}],\"total\":10,\"page\":1,\"limit\":20}}" }]
+            },
+            {
+              "name": "Get Active Curriculum",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/curriculum/active/:programId", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum", "active", ":programId"], "variable": [{ "key": "programId", "value": "{{program_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clcurr001\",\"name\":\"B.Tech CS 2024\",\"version\":\"2.0\",\"batch\":\"2024-2028\",\"status\":\"ACTIVE\",\"semesters\":[{\"semesterNumber\":1,\"courses\":[]}]}}" }]
+            },
+            {
+              "name": "Get Curriculum by ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/curriculum/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum", ":id"], "variable": [{ "key": "id", "value": "{{curriculum_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clcurr001\",\"name\":\"B.Tech CS 2020\",\"program\":{\"name\":\"B.Tech\"},\"semesters\":[{\"semesterNumber\":1,\"courses\":[{\"code\":\"CS101\",\"name\":\"Programming\",\"credits\":4}]}]}}" }]
+            },
+            {
+              "name": "Create Curriculum (Admin)",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"programId\": \"{{program_id}}\",\n  \"version\": \"2.0\",\n  \"batch\": \"2024-2028\",\n  \"name\": \"B.Tech CS Curriculum 2024\",\n  \"description\": \"Updated curriculum for 2024 batch\",\n  \"totalCredits\": 168,\n  \"semesters\": [\n    {\n      \"semesterNumber\": 1,\n      \"courses\": [\n        {\n          \"code\": \"CS101\",\n          \"name\": \"Programming Fundamentals\",\n          \"shortName\": \"Programming\",\n          \"credits\": 4,\n          \"lectureHours\": 3,\n          \"tutorialHours\": 0,\n          \"practicalHours\": 2,\n          \"type\": \"MANDATORY\"\n        },\n        {\n          \"code\": \"MA101\",\n          \"name\": \"Mathematics I\",\n          \"credits\": 4,\n          \"lectureHours\": 4,\n          \"tutorialHours\": 1,\n          \"practicalHours\": 0,\n          \"type\": \"MANDATORY\"\n        }\n      ]\n    }\n  ]\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/curriculum", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum"] }
+              },
+              "response": [{ "name": "Success", "status": "Created", "code": 201, "body": "{\"success\":true,\"data\":{\"id\":\"clcurr002\",\"name\":\"B.Tech CS Curriculum 2024\",\"version\":\"2.0\",\"status\":\"DRAFT\"}}" }]
+            },
+            {
+              "name": "Update Curriculum (Admin)",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"status\": \"ACTIVE\",\n  \"totalCredits\": 170\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/curriculum/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum", ":id"], "variable": [{ "key": "id", "value": "{{curriculum_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clcurr001\",\"status\":\"ACTIVE\",\"totalCredits\":170}}" }]
+            }
+          ]
+        },
+        {
+          "name": "Courses",
+          "item": [
+            {
+              "name": "Get Course by ID",
+              "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "const json = pm.response.json();", "if(json.data?.id) pm.collectionVariables.set('course_id', json.data.id);"], "type": "text/javascript" } }],
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/curriculum/courses/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum", "courses", ":id"], "variable": [{ "key": "id", "value": "{{course_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clcourse001\",\"code\":\"CS101\",\"name\":\"Programming Fundamentals\",\"credits\":4,\"lectureHours\":3,\"practicalHours\":2,\"type\":\"MANDATORY\"}}" }]
+            },
+            {
+              "name": "Create Course (Admin)",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"curriculumSemesterId\": \"clsem001\",\n  \"code\": \"CS201\",\n  \"name\": \"Data Structures\",\n  \"shortName\": \"DS\",\n  \"credits\": 4,\n  \"lectureHours\": 3,\n  \"tutorialHours\": 0,\n  \"practicalHours\": 2,\n  \"type\": \"MANDATORY\"\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/curriculum/courses", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum", "courses"] }
+              },
+              "response": [{ "name": "Success", "status": "Created", "code": 201, "body": "{\"success\":true,\"data\":{\"id\":\"clcourse002\",\"code\":\"CS201\",\"name\":\"Data Structures\"}}" }]
+            },
+            {
+              "name": "Update Course (Admin)",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"name\": \"Data Structures and Algorithms\",\n  \"credits\": 5\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/curriculum/courses/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum", "courses", ":id"], "variable": [{ "key": "id", "value": "{{course_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clcourse001\",\"name\":\"Data Structures and Algorithms\",\"credits\":5}}" }]
+            },
+            {
+              "name": "Delete Course (Admin)",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/curriculum/courses/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "curriculum", "courses", ":id"], "variable": [{ "key": "id", "value": "{{course_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"message\":\"Course deleted\"}}" }]
+            }
+          ]
+        }
+      ]
+    },
+       {
+      "name": "Results",
+      "item": [
+        {
+          "name": "Student",
+          "item": [
+            {
+              "name": "Get My Results",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/results/student", "host": ["{{base_url}}"], "path": ["api", "v1", "results", "student"] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":[{\"id\":\"clres001\",\"semester\":1,\"academicYear\":\"2020-21\",\"sgpa\":8.5,\"status\":\"APPROVED\",\"courses\":[{\"code\":\"CS101\",\"name\":\"Programming\",\"credits\":4,\"grade\":\"A\",\"gradePoints\":9.0}]}]}" }]
+            },
+            {
+              "name": "Create Correction Request",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"entityType\": \"CourseResult\",\n  \"entityId\": \"clcrsres001\",\n  \"field\": \"grade\",\n  \"oldValue\": \"B+\",\n  \"newValue\": \"A\",\n  \"reason\": \"Grade calculation error found in final exam marks. Total marks: 85/100 should be A grade not B+\",\n  \"supportingDocs\": [\"https://example.com/answer-sheet.pdf\"]\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/results/student/corrections", "host": ["{{base_url}}"], "path": ["api", "v1", "results", "student", "corrections"] }
+              },
+              "response": [{ "name": "Success", "status": "Created", "code": 201, "body": "{\"success\":true,\"data\":{\"id\":\"clcorr001\",\"status\":\"PENDING\",\"field\":\"grade\",\"oldValue\":\"B+\",\"newValue\":\"A\"}}" }]
+            }
+          ]
+        },
+        {
+          "name": "Admin/Academic",
+          "item": [
+            {
+              "name": "List All Results",
+              "event": [{ "listen": "test", "script": { "exec": ["const json = pm.response.json();", "if(json.data?.items?.[0]) pm.collectionVariables.set('result_id', json.data.items[0].id);"], "type": "text/javascript" } }],
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/results?page=1&limit=20", "host": ["{{base_url}}"], "path": ["api", "v1", "results"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }, { "key": "studentId", "value": "", "disabled": true }, { "key": "semester", "value": "", "disabled": true }, { "key": "status", "value": "APPROVED", "disabled": true }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"clres001\",\"student\":{\"name\":\"John Doe\",\"enrollmentNumber\":\"2020BCS001\"},\"semester\":1,\"sgpa\":8.5,\"status\":\"APPROVED\"}],\"total\":100,\"page\":1,\"limit\":20}}" }]
+            },
+            {
+              "name": "Create Semester Result",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"studentId\": \"{{student_id}}\",\n  \"semester\": 1,\n  \"academicYear\": \"2024-25\",\n  \"courseResults\": [\n    {\n      \"courseId\": \"{{course_id}}\",\n      \"grade\": \"A\",\n      \"gradePoints\": 9.0,\n      \"internalMarks\": 25,\n      \"externalMarks\": 70,\n      \"totalMarks\": 95,\n      \"attendance\": 92\n    },\n    {\n      \"courseId\": \"clcourse002\",\n      \"grade\": \"B+\",\n      \"gradePoints\": 8.0,\n      \"internalMarks\": 23,\n      \"externalMarks\": 62,\n      \"totalMarks\": 85,\n      \"attendance\": 88\n    }\n  ]\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/results", "host": ["{{base_url}}"], "path": ["api", "v1", "results"] }
+              },
+              "response": [{ "name": "Success", "status": "Created", "code": 201, "body": "{\"success\":true,\"data\":{\"id\":\"clres002\",\"studentId\":\"clstud001\",\"semester\":1,\"sgpa\":8.5,\"status\":\"DRAFT\"}}" }]
+            },
+            {
+              "name": "Bulk Upload Results",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"semester\": 1,\n  \"academicYear\": \"2024-25\",\n  \"programId\": \"{{program_id}}\",\n  \"results\": [\n    {\n      \"enrollmentNumber\": \"2024BCS001\",\n      \"courseCode\": \"CS101\",\n      \"grade\": \"A\",\n      \"gradePoints\": 9.0,\n      \"internalMarks\": 25,\n      \"externalMarks\": 70,\n      \"totalMarks\": 95\n    },\n    {\n      \"enrollmentNumber\": \"2024BCS002\",\n      \"courseCode\": \"CS101\",\n      \"grade\": \"B+\",\n      \"gradePoints\": 8.0,\n      \"internalMarks\": 23,\n      \"externalMarks\": 62,\n      \"totalMarks\": 85\n    }\n  ]\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/results/bulk", "host": ["{{base_url}}"], "path": ["api", "v1", "results", "bulk"] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"imported\":2,\"failed\":0,\"errors\":[]}}" }]
+            },
+            {
+              "name": "Get Student Results",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/results/student/:studentId", "host": ["{{base_url}}"], "path": ["api", "v1", "results", "student", ":studentId"], "variable": [{ "key": "studentId", "value": "{{student_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":[{\"id\":\"clres001\",\"semester\":1,\"sgpa\":8.5,\"cgpa\":8.5,\"status\":\"APPROVED\"}]}" }]
+            },
+            {
+              "name": "Get Semester Result by ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/results/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "results", ":id"], "variable": [{ "key": "id", "value": "{{result_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clres001\",\"student\":{\"name\":\"John Doe\"},\"semester\":1,\"academicYear\":\"2024-25\",\"sgpa\":8.5,\"cgpa\":8.5,\"status\":\"APPROVED\",\"courseResults\":[{\"course\":{\"code\":\"CS101\",\"name\":\"Programming\"},\"grade\":\"A\",\"credits\":4}]}}" }]
+            },
+            {
+              "name": "Update Course Result",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"grade\": \"A+\",\n  \"gradePoints\": 10.0,\n  \"totalMarks\": 98\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/results/course/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "results", "course", ":id"], "variable": [{ "key": "id", "value": "clcrsres001" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clcrsres001\",\"grade\":\"A+\",\"gradePoints\":10.0}}" }]
+            },
+            {
+              "name": "Update Semester Result Status",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"status\": \"APPROVED\",\n  \"approvalNote\": \"Results verified and approved\"\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/results/:id/status", "host": ["{{base_url}}"], "path": ["api", "v1", "results", ":id", "status"], "variable": [{ "key": "id", "value": "{{result_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clres001\",\"status\":\"APPROVED\"}}" }]
+            },
+            {
+              "name": "Get Correction Requests",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/results/corrections", "host": ["{{base_url}}"], "path": ["api", "v1", "results", "corrections"] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":[{\"id\":\"clcorr001\",\"student\":{\"name\":\"John Doe\"},\"entityType\":\"CourseResult\",\"field\":\"grade\",\"oldValue\":\"B+\",\"newValue\":\"A\",\"status\":\"PENDING\",\"reason\":\"Grade error\"}]}" }]
+            },
+            {
+              "name": "Review Correction Request",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"status\": \"APPROVED\",\n  \"reviewNote\": \"Correction verified and approved\"\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/results/corrections/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "results", "corrections", ":id"], "variable": [{ "key": "id", "value": "clcorr001" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clcorr001\",\"status\":\"APPROVED\"}}" }]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Approvals",
+      "item": [
+        {
+          "name": "Get Pending Count",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/approvals/pending/count", "host": ["{{base_url}}"], "path": ["api", "v1", "approvals", "pending", "count"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"total\":15,\"byType\":{\"SEMESTER_RESULT\":8,\"DEGREE_PROPOSAL\":5,\"CORRECTION\":2}}}" }]
+        },
+        {
+          "name": "List Approvals",
+          "event": [{ "listen": "test", "script": { "exec": ["const json = pm.response.json();", "if(json.data?.items?.[0]) pm.collectionVariables.set('approval_id', json.data.items[0].id);"], "type": "text/javascript" } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/approvals?page=1&limit=20", "host": ["{{base_url}}"], "path": ["api", "v1", "approvals"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }, { "key": "type", "value": "SEMESTER_RESULT", "disabled": true }, { "key": "status", "value": "PENDING", "disabled": true }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"clapp001\",\"type\":\"SEMESTER_RESULT\",\"status\":\"PENDING\",\"step\":1,\"createdAt\":\"2026-01-10T00:00:00.000Z\"}],\"total\":15,\"page\":1,\"limit\":20}}" }]
+        },
+        {
+          "name": "Create Approval",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"SEMESTER_RESULT\",\n  \"entityType\": \"SemesterResult\",\n  \"entityId\": \"{{result_id}}\",\n  \"step\": 1,\n  \"description\": \"Semester 1 results approval for batch 2024\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/approvals", "host": ["{{base_url}}"], "path": ["api", "v1", "approvals"] }
+          },
+          "response": [{ "name": "Success", "status": "Created", "code": 201, "body": "{\"success\":true,\"data\":{\"id\":\"clapp002\",\"type\":\"SEMESTER_RESULT\",\"status\":\"PENDING\",\"step\":1}}" }]
+        },
+        {
+          "name": "Get Entity Approvals",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/approvals/entity/:entityType/:entityId", "host": ["{{base_url}}"], "path": ["api", "v1", "approvals", "entity", ":entityType", ":entityId"], "variable": [{ "key": "entityType", "value": "SemesterResult" }, { "key": "entityId", "value": "{{result_id}}" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":[{\"id\":\"clapp001\",\"type\":\"SEMESTER_RESULT\",\"status\":\"PENDING\",\"step\":1,\"approver\":{\"name\":\"Faculty\"}}]}" }]
+        },
+        {
+          "name": "Get Approval by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/approvals/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "approvals", ":id"], "variable": [{ "key": "id", "value": "{{approval_id}}" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clapp001\",\"type\":\"SEMESTER_RESULT\",\"entityType\":\"SemesterResult\",\"entityId\":\"clres001\",\"status\":\"PENDING\",\"step\":1,\"description\":\"Results approval\"}}" }]
+        },
+        {
+          "name": "Review Approval",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"APPROVED\",\n  \"comments\": \"Results reviewed and approved\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/approvals/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "approvals", ":id"], "variable": [{ "key": "id", "value": "{{approval_id}}" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"clapp001\",\"status\":\"APPROVED\",\"approvedAt\":\"2026-01-11T00:00:00.000Z\"}}" }]
+        }
+      ]
+    },
+    {
+      "name": "Degrees",
+      "item": [
+        {
+          "name": "Student",
+          "item": [
+            {
+              "name": "Get My Degree Proposal",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/degrees/me", "host": ["{{base_url}}"], "path": ["api", "v1", "degrees", "me"] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"cldeg001\",\"status\":\"APPROVED\",\"expectedYear\":2024,\"cgpa\":8.5,\"totalCredits\":160,\"eligibility\":{\"isEligible\":true}}}" }, { "name": "Not Found", "status": "Not Found", "code": 404, "body": "{\"success\":false,\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"No degree proposal found\"}}" }]
+            },
+            {
+              "name": "Check My Eligibility",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/degrees/eligibility/me", "host": ["{{base_url}}"], "path": ["api", "v1", "degrees", "eligibility", "me"] }
+              },
+              "response": [{ "name": "Eligible", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"isEligible\":true,\"requiredCredits\":160,\"earnedCredits\":160,\"minCGPA\":5.0,\"currentCGPA\":8.5,\"allSemestersApproved\":true}}" }, { "name": "Not Eligible", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"isEligible\":false,\"requiredCredits\":160,\"earnedCredits\":150,\"reasons\":[\"Insufficient credits: 150/160\",\"CGPA below minimum\"]}}" }]
+            }
+          ]
+        },
+        {
+          "name": "Admin/Academic",
+          "item": [
+            {
+              "name": "List Degree Proposals",
+              "event": [{ "listen": "test", "script": { "exec": ["const json = pm.response.json();", "if(json.data?.items?.[0]) pm.collectionVariables.set('degree_proposal_id', json.data.items[0].id);"], "type": "text/javascript" } }],
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/degrees?page=1&limit=20", "host": ["{{base_url}}"], "path": ["api", "v1", "degrees"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }, { "key": "status", "value": "PENDING_ACADEMIC", "disabled": true }, { "key": "studentId", "value": "", "disabled": true }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"cldeg001\",\"student\":{\"name\":\"John Doe\",\"enrollmentNumber\":\"2020BCS001\"},\"status\":\"PENDING_ACADEMIC\",\"expectedYear\":2024,\"cgpa\":8.5}],\"total\":50,\"page\":1,\"limit\":20}}" }]
+            },
+            {
+              "name": "Create Degree Proposal",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"studentId\": \"{{student_id}}\",\n  \"expectedYear\": 2024,\n  \"notes\": \"Degree proposal for 2024 graduation\"\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/degrees", "host": ["{{base_url}}"], "path": ["api", "v1", "degrees"] }
+              },
+              "response": [{ "name": "Success", "status": "Created", "code": 201, "body": "{\"success\":true,\"data\":{\"id\":\"cldeg002\",\"studentId\":\"clstud001\",\"status\":\"DRAFT\",\"expectedYear\":2024}}" }]
+            },
+            {
+              "name": "Check Student Eligibility",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/degrees/eligibility/:studentId", "host": ["{{base_url}}"], "path": ["api", "v1", "degrees", "eligibility", ":studentId"], "variable": [{ "key": "studentId", "value": "{{student_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"isEligible\":true,\"requiredCredits\":160,\"earnedCredits\":160,\"currentCGPA\":8.5}}" }]
+            },
+            {
+              "name": "Get Degree Proposal by ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+                "url": { "raw": "{{base_url}}/api/v1/degrees/:id", "host": ["{{base_url}}"], "path": ["api", "v1", "degrees", ":id"], "variable": [{ "key": "id", "value": "{{degree_proposal_id}}" }] }
+              },
+              "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"cldeg001\",\"student\":{\"name\":\"John Doe\",\"enrollmentNumber\":\"2020BCS001\"},\"status\":\"APPROVED\",\"expectedYear\":2024,\"cgpa\":8.5,\"totalCredits\":160,\"eligibility\":{\"isEligible\":true}}}" }]
+            },
+            {
+              "name": "Academic Review",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"action\": \"approve\",\n  \"note\": \"Academic requirements fulfilled. Approved for admin review.\"\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/degrees/:id/academic-review", "host": ["{{base_url}}"], "path": ["api", "v1", "degrees", ":id", "academic-review"], "variable": [{ "key": "id", "value": "{{degree_proposal_id}}" }] }
+              },
+              "response": [{ "name": "Approved", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"cldeg001\",\"status\":\"PENDING_ADMIN\",\"academicReviewedAt\":\"2026-01-11T00:00:00.000Z\"}}" }, { "name": "Rejected", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"cldeg001\",\"status\":\"REJECTED\",\"rejectionReason\":\"Insufficient credits\"}}" }]
+            },
+            {
+              "name": "Admin Review",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"action\": \"approve\",\n  \"note\": \"Final approval granted. Ready for degree issuance.\"\n}" },
+                "url": { "raw": "{{base_url}}/api/v1/degrees/:id/admin-review", "host": ["{{base_url}}"], "path": ["api", "v1", "degrees", ":id", "admin-review"], "variable": [{ "key": "id", "value": "{{degree_proposal_id}}" }] }
+              },
+              "response": [{ "name": "Approved", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"id\":\"cldeg001\",\"status\":\"APPROVED\",\"adminReviewedAt\":\"2026-01-11T00:00:00.000Z\"}}" }]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Audit",
+      "item": [
+        {
+          "name": "Get Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/audit?page=1&limit=50", "host": ["{{base_url}}"], "path": ["api", "v1", "audit"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "50" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"claud001\",\"action\":\"UPDATE\",\"entityType\":\"Student\",\"entityId\":\"clstud001\",\"userId\":\"clusr001\",\"user\":{\"name\":\"Admin\"},\"changes\":{\"before\":{\"status\":\"PENDING\"},\"after\":{\"status\":\"ACTIVE\"}},\"timestamp\":\"2026-01-11T00:00:00.000Z\"}],\"total\":1000,\"page\":1,\"limit\":50}}" }]
+        },
+        {
+          "name": "Get Entity Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/audit/:entityType/:entityId", "host": ["{{base_url}}"], "path": ["api", "v1", "audit", ":entityType", ":entityId"], "variable": [{ "key": "entityType", "value": "Student" }, { "key": "entityId", "value": "{{student_id}}" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":[{\"id\":\"claud001\",\"action\":\"CREATE\",\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"user\":{\"name\":\"Admin\"}},{\"id\":\"claud002\",\"action\":\"UPDATE\",\"timestamp\":\"2026-01-05T00:00:00.000Z\",\"changes\":{\"status\":\"ACTIVE\"}}]}" }]
+        }
+      ]
+    },
+    {
+      "name": "Settings",
+      "item": [
+        {
+          "name": "Get All Settings",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/settings", "host": ["{{base_url}}"], "path": ["api", "v1", "settings"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"college\":{\"name\":\"ABV-IIITM Gwalior\",\"shortName\":\"IIITM\"},\"approvals\":{\"semesterResult\":{\"steps\":2,\"approvers\":[\"ACADEMIC\",\"ADMIN\"]},\"degreeProposal\":{\"steps\":2,\"approvers\":[\"ACADEMIC\",\"ADMIN\"]}}}}" }]
+        },
+        {
+          "name": "Get College Settings",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/settings/college", "host": ["{{base_url}}"], "path": ["api", "v1", "settings", "college"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"name\":\"ABV-IIITM Gwalior\",\"shortName\":\"IIITM\",\"logoUrl\":\"https://example.com/logo.png\",\"address\":\"Gwalior, MP, India\",\"website\":\"https://iiitm.ac.in\"}}" }]
+        },
+        {
+          "name": "Update College Settings",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"ABV-IIITM Gwalior\",\n  \"shortName\":\"IIITM\",\n  \"logoUrl\": \"https://example.com/new-logo.png\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/settings/college", "host": ["{{base_url}}"], "path": ["api", "v1", "settings", "college"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"name\":\"ABV-IIITM Gwalior\",\"logoUrl\":\"https://example.com/new-logo.png\"}}" }]
+        },
+        {
+          "name": "Get Approval Settings",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/settings/approvals/:type", "host": ["{{base_url}}"], "path": ["api", "v1", "settings", "approvals", ":type"], "variable": [{ "key": "type", "value": "SEMESTER_RESULT" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"type\":\"SEMESTER_RESULT\",\"steps\":2,\"approvers\":[\"ACADEMIC\",\"ADMIN\"],\"description\":\"Two-step approval for semester results\"}}" }]
+        },
+        {
+          "name": "Update Approval Settings",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"steps\": 3,\n  \"approvers\": [\"ACADEMIC\", \"ADMIN\", \"ADMIN\"]\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/settings/approvals/:type", "host": ["{{base_url}}"], "path": ["api", "v1", "settings", "approvals", ":type"], "variable": [{ "key": "type", "value": "SEMESTER_RESULT" }] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"type\":\"SEMESTER_RESULT\",\"steps\":3}}" }]
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Admin Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/dashboard/admin/stats", "host": ["{{base_url}}"], "path": ["api", "v1", "dashboard", "admin", "stats"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"students\":{\"total\":500,\"active\":450,\"graduated\":30},\"results\":{\"pending\":25,\"approved\":475},\"approvals\":{\"pending\":15},\"credentials\":{\"issued\":400,\"pending\":50}}}" }]
+        },
+        {
+          "name": "Student Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/dashboard/student", "host": ["{{base_url}}"], "path": ["api", "v1", "dashboard", "student"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"student\":{\"name\":\"John Doe\",\"enrollmentNumber\":\"2020BCS001\",\"currentSemester\":6,\"cgpa\":8.5},\"recentResults\":[{\"semester\":5,\"sgpa\":8.8}],\"credentials\":{\"total\":5,\"issued\":5},\"degreeProposal\":{\"status\":\"APPROVED\"}}}" }]
+        },
+        {
+          "name": "Quick Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/dashboard/quick-stats", "host": ["{{base_url}}"], "path": ["api", "v1", "dashboard", "quick-stats"] }
+          },
+          "response": [{ "name": "Success", "status": "OK", "code": 200, "body": "{\"success\":true,\"data\":{\"pendingApprovals\":15,\"recentActivity\":25,\"systemHealth\":\"healthy\"}}" }]
+        }
+      ]
+    }
+  ]
+}
+
