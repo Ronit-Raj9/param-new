@@ -1,6 +1,7 @@
 import { createBlockchainWorker } from "./blockchain/blockchain.worker.js";
 import { createCSVWorker } from "./csv/csv.worker.js";
 import { createPDFWorker } from "./pdf/pdf.worker.js";
+import { createWalletWorker } from "./wallet/wallet.worker.js";
 import { createLogger } from "../utils/logger.js";
 
 const logger = createLogger("workers");
@@ -14,15 +15,17 @@ export function startWorkers() {
   const blockchainWorker = createBlockchainWorker();
   const csvWorker = createCSVWorker();
   const pdfWorker = createPDFWorker();
+  const walletWorker = createWalletWorker();
 
   // Graceful shutdown
   const shutdown = async () => {
     logger.info("Shutting down workers...");
-    
+
     await Promise.all([
       blockchainWorker.close(),
       csvWorker.close(),
       pdfWorker.close(),
+      walletWorker.close(),
     ]);
 
     logger.info("All workers stopped");
@@ -38,6 +41,7 @@ export function startWorkers() {
     blockchainWorker,
     csvWorker,
     pdfWorker,
+    walletWorker,
   };
 }
 
@@ -45,3 +49,4 @@ export function startWorkers() {
 export { createBlockchainWorker } from "./blockchain/blockchain.worker.js";
 export { createCSVWorker } from "./csv/csv.worker.js";
 export { createPDFWorker } from "./pdf/pdf.worker.js";
+export { createWalletWorker } from "./wallet/wallet.worker.js";
