@@ -9,6 +9,9 @@ import credentialsRouter from "./modules/credentials/credentials.routes.js";
 import degreesRouter from "./modules/degrees/degrees.routes.js";
 import verificationRouter from "./modules/verification/verification.routes.js";
 import auditRouter from "./modules/audit/audit.routes.js";
+import settingsRouter from "./modules/settings/settings.routes.js";
+import dashboardRouter from "./modules/dashboard/dashboard.routes.js";
+import issuanceRouter from "./modules/issuance/issuance.routes.js";
 
 export const router = Router();
 
@@ -41,5 +44,14 @@ router.use("/verify", verificationRouter);
 
 // Audit logs
 router.use("/audit", auditRouter);
+
+// System settings
+router.use("/settings", settingsRouter);
+
+// Dashboard
+router.use("/dashboard", dashboardRouter);
+
+// Credential Issuance & Jobs
+router.use("/issuance", issuanceRouter);
 
 export default router;

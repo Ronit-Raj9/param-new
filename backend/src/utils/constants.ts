@@ -85,6 +85,7 @@ export const QUEUE_NAMES = {
   CSV: "csv-processing",
   PDF: "pdf-generation",
   BLOCKCHAIN: "blockchain-operations",
+  WALLET: "wallet-operations",
   EMAIL: "email-sending",
 } as const;
 
@@ -101,21 +102,21 @@ export const ERROR_CODES = {
   FORBIDDEN: "FORBIDDEN",
   INVALID_TOKEN: "INVALID_TOKEN",
   TOKEN_EXPIRED: "TOKEN_EXPIRED",
-  
+
   // Validation errors
   VALIDATION_ERROR: "VALIDATION_ERROR",
   INVALID_INPUT: "INVALID_INPUT",
   DUPLICATE_ENTRY: "DUPLICATE_ENTRY",
-  
+
   // Resource errors
   NOT_FOUND: "NOT_FOUND",
   CONFLICT: "CONFLICT",
-  
+
   // Business logic errors
   INVALID_STATE: "INVALID_STATE",
   CREDIT_VALIDATION_FAILED: "CREDIT_VALIDATION_FAILED",
   APPROVAL_REQUIRED: "APPROVAL_REQUIRED",
-  
+
   // System errors
   INTERNAL_ERROR: "INTERNAL_ERROR",
   SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",

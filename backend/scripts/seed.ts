@@ -1,37 +1,9 @@
-import { PrismaClient, Role } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log("🌱 Starting database seed...");
-
-  // Create Admin User
-  const adminUser = await prisma.user.upsert({
-    where: { email: "admin@iiitm.ac.in" },
-    update: {},
-    create: {
-      email: "admin@iiitm.ac.in",
-      name: "System Administrator",
-      role: Role.ADMIN,
-      privyId: "admin_placeholder_did",
-      status: "ACTIVE",
-    },
-  });
-  console.log("✅ Admin user created:", adminUser.email);
-
-  // Create Academic Staff
-  const academicUser = await prisma.user.upsert({
-    where: { email: "academic@iiitm.ac.in" },
-    update: {},
-    create: {
-      email: "academic@iiitm.ac.in",
-      name: "Academic Section Head",
-      role: Role.ACADEMIC,
-      privyId: "academic_placeholder_did",
-      status: "ACTIVE",
-    },
-  });
-  console.log("✅ Academic user created:", academicUser.email);
 
   // Create Programs
   const btechIT = await prisma.program.upsert({
@@ -186,37 +158,6 @@ async function main() {
     console.log("✅ Courses created for Semester 2");
   }
 
-  // Create a sample student
-  const studentUser = await prisma.user.upsert({
-    where: { email: "2024001@iiitm.ac.in" },
-    update: {},
-    create: {
-      email: "2024001@iiitm.ac.in",
-      name: "Test Student",
-      role: Role.STUDENT,
-      privyId: "student_placeholder_did",
-      status: "ACTIVE",
-    },
-  });
-
-  const student = await prisma.student.upsert({
-    where: { enrollmentNumber: "2024IT001" },
-    update: {},
-    create: {
-      enrollmentNumber: "2024IT001",
-      name: "Test Student",
-      email: "teststudent@gmail.com",
-      userId: studentUser.id,
-      programId: btechIT.id,
-      curriculumId: curriculum2024.id,
-      batch: "2024-2028",
-      admissionYear: 2024,
-      expectedGradYear: 2028,
-      status: "ACTIVE",
-    },
-  });
-  console.log("✅ Sample student created:", student.enrollmentNumber);
-
   // Create grade scale
   const grades = [
     { grade: "A+", gradePoints: 10.0, minMarks: 90, description: "Outstanding", displayOrder: 1 },
@@ -246,10 +187,12 @@ async function main() {
   console.log("✅ Grade scale created");
 
   console.log("\n🎉 Database seeded successfully!");
-  console.log("\nTest accounts:");
-  console.log("  Admin: admin@iiitm.ac.in");
-  console.log("  Academic: academic@iiitm.ac.in");
-  console.log("  Student: 2024001@iiitm.ac.in (Enrollment: 2024IT001)");
+  console.log("\nSeeded data:");
+  console.log("  - 3 Programs (B.Tech IT, IPM, M.Tech CS)");
+  console.log("  - 1 Curriculum (B.Tech IT 2024)");
+  console.log("  - 8 Semesters");
+  console.log("  - 12 Courses (6 per semester for Sem 1 & 2)");
+  console.log("  - 8 Grade scale entries");
 }
 
 main()

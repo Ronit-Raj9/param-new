@@ -2,6 +2,7 @@ import { ethers } from "ethers";
 import { getProvider, CREDENTIAL_NFT_ABI, CREDENTIAL_NFT_ADDRESS } from "../config/blockchain.js";
 import { env } from "../config/env.js";
 import { createLogger } from "../utils/logger.js";
+import * as privyWalletService from "./privy-wallet.service.js";
 
 const logger = createLogger("blockchain-service");
 
@@ -17,17 +18,29 @@ interface CredentialNFTContract {
 
 /**
  * Get signer for transactions
+ * Uses Privy wallet service which handles Privy Server Wallets or raw key fallback
+ */
+async function getSignerAsync(): Promise<ethers.Wallet> {
+  const signer = await privyWalletService.getSigner();
+  if (!signer) {
+    throw new Error("No wallet configured - set MINTER_PRIVATE_KEY or PRIVY_WALLET_ID");
+  }
+  return signer;
+}
+
+/**
+ * @deprecated Use getSignerAsync instead - kept for backwards compatibility
  */
 function getSigner(): ethers.Wallet {
   const provider = getProvider();
   if (!provider) {
     throw new Error("Blockchain provider not configured");
   }
-  
+
   if (!env.MINTER_PRIVATE_KEY) {
     throw new Error("MINTER_PRIVATE_KEY not configured");
   }
-  
+
   return new ethers.Wallet(env.MINTER_PRIVATE_KEY, provider);
 }
 
@@ -38,12 +51,12 @@ function getContract(signerOrProvider?: ethers.Wallet | ethers.JsonRpcProvider):
   if (!CREDENTIAL_NFT_ADDRESS) {
     throw new Error("CREDENTIAL_NFT_ADDRESS not configured");
   }
-  
+
   const providerOrSigner = signerOrProvider || getProvider();
   if (!providerOrSigner) {
     throw new Error("Blockchain provider not configured");
   }
-  
+
   return new ethers.Contract(CREDENTIAL_NFT_ADDRESS, CREDENTIAL_NFT_ABI, providerOrSigner);
 }
 
@@ -80,10 +93,10 @@ export async function mintCredentialNFT(
 
     const tokenId = ethers.toBigInt(transferEvent.topics[3]).toString();
 
-    logger.info({ 
-      tokenId, 
+    logger.info({
+      tokenId,
       transactionHash: receipt.hash,
-      recipientAddress 
+      recipientAddress
     }, "Credential NFT minted successfully");
 
     return {
@@ -219,9 +232,9 @@ export async function verifyCredentialOnChain(
 
     return { valid: true };
   } catch (error) {
-    return { 
-      valid: false, 
-      reason: error instanceof Error ? error.message : "Verification failed" 
+    return {
+      valid: false,
+      reason: error instanceof Error ? error.message : "Verification failed"
     };
   }
 }
@@ -254,7 +267,7 @@ export async function getCurrentGasPrice(): Promise<bigint> {
   if (!provider) {
     throw new Error("Blockchain provider not configured");
   }
-  
+
   const feeData = await provider.getFeeData();
   return feeData.gasPrice || BigInt(0);
 }
