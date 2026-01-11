@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -18,7 +18,9 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Plus, Edit2, Trash2, GraduationCap, BookOpen, Layers } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { useApi } from "@/hooks/use-api"
+import { Search, Plus, Edit2, Trash2, GraduationCap, BookOpen, Layers, Loader2 } from "lucide-react"
 
 interface Program {
   id: string
@@ -26,6 +28,7 @@ interface Program {
   name: string
   department: string
   duration: number
+  durationYears: number
   totalCredits: number
   totalSemesters: number
   status: "active" | "discontinued"
@@ -38,105 +41,98 @@ interface Course {
   credits: number
   type: "core" | "elective" | "lab"
   semester: number
-  program: string
+  programCode: string
 }
 
-const mockPrograms: Program[] = [
-  {
-    id: "1",
-    code: "BCS",
-    name: "Bachelor of Technology in Computer Science",
-    department: "Computer Science",
-    duration: 4,
-    totalCredits: 160,
-    totalSemesters: 8,
-    status: "active",
-  },
-  {
-    id: "2",
-    code: "BIT",
-    name: "Bachelor of Technology in Information Technology",
-    department: "Information Technology",
-    duration: 4,
-    totalCredits: 160,
-    totalSemesters: 8,
-    status: "active",
-  },
-  {
-    id: "3",
-    code: "MCS",
-    name: "Master of Technology in Computer Science",
-    department: "Computer Science",
-    duration: 2,
-    totalCredits: 80,
-    totalSemesters: 4,
-    status: "active",
-  },
-  {
-    id: "4",
-    code: "IPG",
-    name: "Integrated Post Graduate (B.Tech + M.Tech)",
-    department: "Computer Science",
-    duration: 5,
-    totalCredits: 200,
-    totalSemesters: 10,
-    status: "active",
-  },
-]
-
-const mockCourses: Course[] = [
-  {
-    id: "1",
-    code: "CS101",
-    name: "Introduction to Programming",
-    credits: 4,
-    type: "core",
-    semester: 1,
-    program: "BCS",
-  },
-  { id: "2", code: "CS102", name: "Digital Logic Design", credits: 3, type: "core", semester: 1, program: "BCS" },
-  { id: "3", code: "CS201", name: "Data Structures", credits: 4, type: "core", semester: 3, program: "BCS" },
-  {
-    id: "4",
-    code: "CS202",
-    name: "Object Oriented Programming",
-    credits: 4,
-    type: "core",
-    semester: 3,
-    program: "BCS",
-  },
-  {
-    id: "5",
-    code: "CS301",
-    name: "Database Management Systems",
-    credits: 4,
-    type: "core",
-    semester: 5,
-    program: "BCS",
-  },
-  { id: "6", code: "CS302", name: "Operating Systems", credits: 4, type: "core", semester: 5, program: "BCS" },
-  { id: "7", code: "CS401", name: "Machine Learning", credits: 3, type: "elective", semester: 7, program: "BCS" },
-  { id: "8", code: "CS402", name: "Cloud Computing", credits: 3, type: "elective", semester: 7, program: "BCS" },
-]
-
 export function CurriculumManagement() {
+  const { toast } = useToast()
+  const api = useApi()
+  const [programs, setPrograms] = useState<Program[]>([])
+  const [courses, setCourses] = useState<Course[]>([])
+  const [isLoadingPrograms, setIsLoadingPrograms] = useState(true)
+  const [isLoadingCourses, setIsLoadingCourses] = useState(true)
+
   const [searchProgram, setSearchProgram] = useState("")
   const [searchCourse, setSearchCourse] = useState("")
   const [selectedProgram, setSelectedProgram] = useState<string>("all")
 
-  const filteredPrograms = mockPrograms.filter(
+  const [isAddingProgram, setIsAddingProgram] = useState(false)
+  const [newProgram, setNewProgram] = useState({ 
+    code: "", 
+    name: "", 
+    shortName: "",
+    degreeType: "",
+    duration: "", 
+    totalCredits: "" 
+  })
+
+  // Fetch programs
+  useEffect(() => {
+    async function fetchPrograms() {
+      if (!api.isReady) return
+      
+      try {
+        setIsLoadingPrograms(true)
+        const data = await api.get<{ success: boolean; data: Program[] }>("/v1/curriculum/programs")
+        if (data.success) {
+          setPrograms(data.data || [])
+        }
+      } catch (err) {
+        console.error("Error fetching programs:", err)
+        setPrograms([])
+      } finally {
+        setIsLoadingPrograms(false)
+      }
+    }
+
+    fetchPrograms()
+  }, [api.isReady])
+
+  // Note: Courses are fetched as part of curriculums, not separately
+  // The courses tab will show courses from selected curriculum
+  useEffect(() => {
+    // Reset courses loading when api is ready
+    if (api.isReady) {
+      setIsLoadingCourses(false)
+    }
+  }, [api.isReady])
+
+  const filteredPrograms = programs.filter(
     (p) =>
       p.name.toLowerCase().includes(searchProgram.toLowerCase()) ||
-      p.code.toLowerCase().includes(searchProgram.toLowerCase()),
+      p.code.toLowerCase().includes(searchProgram.toLowerCase())
   )
 
-  const filteredCourses = mockCourses.filter((c) => {
+  const filteredCourses = courses.filter((c) => {
     const matchesSearch =
       c.name.toLowerCase().includes(searchCourse.toLowerCase()) ||
       c.code.toLowerCase().includes(searchCourse.toLowerCase())
-    const matchesProgram = selectedProgram === "all" || c.program === selectedProgram
-    return matchesSearch && matchesProgram
+    return matchesSearch
   })
+
+  const handleAddProgram = async () => {
+    try {
+      const data = await api.post<{ success: boolean; data: Program }>("/v1/curriculum/programs", {
+        code: newProgram.code,
+        name: newProgram.name,
+        shortName: newProgram.shortName || newProgram.code,
+        degreeType: newProgram.degreeType,
+        durationYears: parseInt(newProgram.duration),
+        totalCredits: parseInt(newProgram.totalCredits),
+        totalSemesters: parseInt(newProgram.duration) * 2,
+      })
+
+      if (data.success) {
+        setPrograms([...programs, data.data])
+        setNewProgram({ code: "", name: "", shortName: "", degreeType: "", duration: "", totalCredits: "" })
+        setIsAddingProgram(false)
+        toast({ title: "Success", description: "Program created successfully" })
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to create program"
+      toast({ title: "Error", description: message, variant: "destructive" })
+    }
+  }
 
   return (
     <Tabs defaultValue="programs" className="space-y-6">
@@ -155,6 +151,7 @@ export function CurriculumManagement() {
         </TabsTrigger>
       </TabsList>
 
+      {/* Programs Tab */}
       <TabsContent value="programs" className="space-y-6">
         <Card>
           <CardHeader className="pb-4">
@@ -163,47 +160,95 @@ export function CurriculumManagement() {
                 <CardTitle className="text-lg">Academic Programs</CardTitle>
                 <CardDescription>Manage degree programs offered by the institution</CardDescription>
               </div>
-              <Dialog>
+              <Dialog open={isAddingProgram} onOpenChange={setIsAddingProgram}>
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Program
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="sm:max-w-[500px]">
                   <DialogHeader>
                     <DialogTitle>Add New Program</DialogTitle>
                     <DialogDescription>Create a new academic program</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <div className="grid gap-2">
-                      <Label>Program Code</Label>
-                      <Input placeholder="e.g., BCS, MCS" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Program Code *</Label>
+                        <Input
+                          placeholder="e.g., BT-CSE"
+                          value={newProgram.code}
+                          onChange={(e) => setNewProgram({ ...newProgram, code: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Short Name</Label>
+                        <Input
+                          placeholder="e.g., B.Tech CSE"
+                          value={newProgram.shortName}
+                          onChange={(e) => setNewProgram({ ...newProgram, shortName: e.target.value })}
+                        />
+                      </div>
                     </div>
                     <div className="grid gap-2">
-                      <Label>Program Name</Label>
-                      <Input placeholder="Full program name" />
+                      <Label>Program Name *</Label>
+                      <Input
+                        placeholder="e.g., Bachelor of Technology in Computer Science"
+                        value={newProgram.name}
+                        onChange={(e) => setNewProgram({ ...newProgram, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Degree Type *</Label>
+                      <Select
+                        value={newProgram.degreeType}
+                        onValueChange={(value) => setNewProgram({ ...newProgram, degreeType: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select degree type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Bachelor of Technology">Bachelor of Technology</SelectItem>
+                          <SelectItem value="Bachelor of Science">Bachelor of Science</SelectItem>
+                          <SelectItem value="Bachelor of Arts">Bachelor of Arts</SelectItem>
+                          <SelectItem value="Master of Technology">Master of Technology</SelectItem>
+                          <SelectItem value="Master of Science">Master of Science</SelectItem>
+                          <SelectItem value="Master of Business Administration">Master of Business Administration</SelectItem>
+                          <SelectItem value="Doctor of Philosophy">Doctor of Philosophy</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="grid gap-2">
-                        <Label>Duration (Years)</Label>
-                        <Input type="number" placeholder="4" />
+                        <Label>Duration (Years) *</Label>
+                        <Input
+                          type="number"
+                          placeholder="4"
+                          value={newProgram.duration}
+                          onChange={(e) => setNewProgram({ ...newProgram, duration: e.target.value })}
+                        />
                       </div>
                       <div className="grid gap-2">
-                        <Label>Total Credits</Label>
-                        <Input type="number" placeholder="160" />
+                        <Label>Total Credits *</Label>
+                        <Input
+                          type="number"
+                          placeholder="160"
+                          value={newProgram.totalCredits}
+                          onChange={(e) => setNewProgram({ ...newProgram, totalCredits: e.target.value })}
+                        />
                       </div>
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button>Create Program</Button>
+                    <Button onClick={handleAddProgram}>Create Program</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-4 mb-6">
+            <div className="flex gap-4 mb-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
@@ -215,111 +260,89 @@ export function CurriculumManagement() {
               </div>
             </div>
 
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Program Name</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Credits</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPrograms.map((program) => (
-                  <TableRow key={program.id}>
-                    <TableCell className="font-mono font-medium">{program.code}</TableCell>
-                    <TableCell>{program.name}</TableCell>
-                    <TableCell>{program.department}</TableCell>
-                    <TableCell>{program.duration} years</TableCell>
-                    <TableCell>{program.totalCredits}</TableCell>
-                    <TableCell>
-                      <Badge variant={program.status === "active" ? "default" : "secondary"}>{program.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon">
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            {/* Loading State */}
+            {isLoadingPrograms && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!isLoadingPrograms && filteredPrograms.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <GraduationCap className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium">No programs found</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {searchProgram ? "Try a different search term" : "Add your first program to get started"}
+                </p>
+              </div>
+            )}
+
+            {/* Programs Table */}
+            {!isLoadingPrograms && filteredPrograms.length > 0 && (
+              <div className="rounded-lg border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-center">Duration</TableHead>
+                      <TableHead className="text-center">Credits</TableHead>
+                      <TableHead className="text-center">Semesters</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredPrograms.map((program) => (
+                      <TableRow key={program.id}>
+                        <TableCell className="font-mono font-medium">{program.code}</TableCell>
+                        <TableCell className="max-w-[300px] truncate">{program.name}</TableCell>
+                        <TableCell className="text-center">{program.durationYears || program.duration} yrs</TableCell>
+                        <TableCell className="text-center">{program.totalCredits}</TableCell>
+                        <TableCell className="text-center">{program.totalSemesters}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={program.status === "active" ? "default" : "secondary"}>
+                            {program.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon">
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </TabsContent>
 
+      {/* Courses Tab */}
       <TabsContent value="courses" className="space-y-6">
         <Card>
           <CardHeader className="pb-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <CardTitle className="text-lg">Courses</CardTitle>
-                <CardDescription>Manage individual courses and their details</CardDescription>
+                <CardDescription>Manage courses for each program</CardDescription>
               </div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Course
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add New Course</DialogTitle>
-                    <DialogDescription>Create a new course</DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label>Course Code</Label>
-                        <Input placeholder="e.g., CS101" />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>Credits</Label>
-                        <Input type="number" placeholder="4" />
-                      </div>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Course Name</Label>
-                      <Input placeholder="Full course name" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label>Type</Label>
-                        <Select>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="core">Core</SelectItem>
-                            <SelectItem value="elective">Elective</SelectItem>
-                            <SelectItem value="lab">Lab</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>Semester</Label>
-                        <Input type="number" placeholder="1-8" />
-                      </div>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button>Create Course</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Course
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="flex flex-col md:flex-row gap-4 mb-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
@@ -335,118 +358,95 @@ export function CurriculumManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Programs</SelectItem>
-                  {mockPrograms.map((p) => (
+                  {programs.map((p) => (
                     <SelectItem key={p.id} value={p.code}>
-                      {p.code} - {p.name}
+                      {p.code}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Course Name</TableHead>
-                  <TableHead>Credits</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Semester</TableHead>
-                  <TableHead>Program</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredCourses.map((course) => (
-                  <TableRow key={course.id}>
-                    <TableCell className="font-mono font-medium">{course.code}</TableCell>
-                    <TableCell>{course.name}</TableCell>
-                    <TableCell>{course.credits}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={
-                          course.type === "core"
-                            ? "border-blue-200 bg-blue-50 text-blue-700"
-                            : course.type === "elective"
-                              ? "border-purple-200 bg-purple-50 text-purple-700"
-                              : "border-green-200 bg-green-50 text-green-700"
-                        }
-                      >
-                        {course.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>Sem {course.semester}</TableCell>
-                    <TableCell>{course.program}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon">
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            {/* Loading State */}
+            {isLoadingCourses && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!isLoadingCourses && filteredCourses.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium">No courses found</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {searchCourse || selectedProgram !== "all"
+                    ? "Try adjusting your filters"
+                    : "Add courses to your programs"}
+                </p>
+              </div>
+            )}
+
+            {/* Courses Table */}
+            {!isLoadingCourses && filteredCourses.length > 0 && (
+              <div className="rounded-lg border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-center">Credits</TableHead>
+                      <TableHead className="text-center">Type</TableHead>
+                      <TableHead className="text-center">Semester</TableHead>
+                      <TableHead className="text-center">Program</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCourses.map((course) => (
+                      <TableRow key={course.id}>
+                        <TableCell className="font-mono font-medium">{course.code}</TableCell>
+                        <TableCell className="max-w-[250px] truncate">{course.name}</TableCell>
+                        <TableCell className="text-center">{course.credits}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline">{course.type}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">{course.semester}</TableCell>
+                        <TableCell className="text-center font-mono">{course.programCode}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon">
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </TabsContent>
 
+      {/* Structure Tab */}
       <TabsContent value="structure" className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Curriculum Structure</CardTitle>
-            <CardDescription>View and manage semester-wise course distribution</CardDescription>
+            <CardDescription>View and manage the curriculum structure for each program</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="mb-6">
-              <Select defaultValue="BCS">
-                <SelectTrigger className="w-full md:w-[300px]">
-                  <SelectValue placeholder="Select program" />
-                </SelectTrigger>
-                <SelectContent>
-                  {mockPrograms.map((p) => (
-                    <SelectItem key={p.id} value={p.code}>
-                      {p.code} - {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => {
-                const semCourses = mockCourses.filter((c) => c.semester === sem)
-                const totalCredits = semCourses.reduce((acc, c) => acc + c.credits, 0)
-                return (
-                  <Card key={sem} className="border-slate-200">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base flex items-center justify-between">
-                        Semester {sem}
-                        <Badge variant="secondary">{totalCredits} credits</Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {semCourses.length > 0 ? (
-                        <ul className="space-y-2">
-                          {semCourses.map((course) => (
-                            <li key={course.id} className="flex items-center justify-between text-sm">
-                              <span className="text-slate-600">{course.code}</span>
-                              <span className="text-slate-400">{course.credits}cr</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-slate-400 italic">No courses assigned</p>
-                      )}
-                    </CardContent>
-                  </Card>
-                )
-              })}
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Layers className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium">Structure View</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Select a program to view its curriculum structure
+              </p>
             </div>
           </CardContent>
         </Card>

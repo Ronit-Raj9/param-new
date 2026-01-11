@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,22 +9,115 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Bell, Mail, Shield, Database, Globe, Save } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { useApi } from "@/hooks/use-api"
+import { Bell, Mail, Shield, Database, Globe, Save, Loader2, Link2, Wallet } from "lucide-react"
+
+interface CollegeSettings {
+  id: string
+  name: string
+  shortName: string
+  fullName: string
+  logoUrl?: string
+  websiteUrl?: string
+  address?: string
+  city?: string
+  state?: string
+  country: string
+  pincode?: string
+  phone?: string
+  email?: string
+  chainId: number
+  rpcUrl?: string
+  contractSemester?: string
+  contractDegree?: string
+  degreeSoulbound: boolean
+  allowCorrections: boolean
+  requireCreditValidation: boolean
+  gradingSystem?: unknown
+}
 
 export function SystemSettings() {
+  const { toast } = useToast()
+  const api = useApi()
   const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [settings, setSettings] = useState<CollegeSettings | null>(null)
+
+  useEffect(() => {
+    if (!api.isReady) return
+
+    async function fetchSettings() {
+      try {
+        setIsLoading(true)
+        const data = await api.get<{ success: boolean; data: CollegeSettings }>("/v1/settings/college")
+        if (data.success) {
+          setSettings(data.data)
+        }
+      } catch (err) {
+        console.error("Error fetching settings:", err)
+        toast({
+          title: "Error",
+          description: "Failed to load settings",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchSettings()
+  }, [api.isReady])
 
   const handleSave = async () => {
-    setIsSaving(true)
-    // Simulate save
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsSaving(false)
+    if (!settings) return
+
+    try {
+      setIsSaving(true)
+      const data = await api.patch<{ success: boolean }>("/v1/settings/college", settings)
+      
+      if (data.success) {
+        toast({
+          title: "Settings saved",
+          description: "Your changes have been saved successfully",
+        })
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to save settings",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const updateSetting = <K extends keyof CollegeSettings>(key: K, value: CollegeSettings[K]) => {
+    setSettings((prev) => prev ? { ...prev, [key]: value } : null)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!settings) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">Failed to load settings</p>
+      </div>
+    )
   }
 
   return (
     <Tabs defaultValue="general" className="space-y-6">
       <TabsList className="bg-slate-100">
         <TabsTrigger value="general">General</TabsTrigger>
+        <TabsTrigger value="blockchain">Blockchain</TabsTrigger>
         <TabsTrigger value="notifications">Notifications</TabsTrigger>
         <TabsTrigger value="security">Security</TabsTrigger>
         <TabsTrigger value="integrations">Integrations</TabsTrigger>
@@ -43,33 +136,101 @@ export function SystemSettings() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="institutionName">Institution Name</Label>
-                <Input id="institutionName" defaultValue="IIITM Gwalior" />
+                <Input 
+                  id="institutionName" 
+                  value={settings.name}
+                  onChange={(e) => updateSetting("name", e.target.value)}
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="institutionCode">Institution Code</Label>
-                <Input id="institutionCode" defaultValue="IIITM" />
+                <Label htmlFor="institutionCode">Short Name</Label>
+                <Input 
+                  id="institutionCode" 
+                  value={settings.shortName}
+                  onChange={(e) => updateSetting("shortName", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="fullName">Full Name</Label>
+                <Input 
+                  id="fullName" 
+                  value={settings.fullName}
+                  onChange={(e) => updateSetting("fullName", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="websiteUrl">Website URL</Label>
+                <Input 
+                  id="websiteUrl" 
+                  type="url"
+                  value={settings.websiteUrl || ""}
+                  onChange={(e) => updateSetting("websiteUrl", e.target.value)}
+                  placeholder="https://example.ac.in"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="supportEmail">Support Email</Label>
-                <Input id="supportEmail" type="email" defaultValue="support@iiitm.ac.in" />
+                <Input 
+                  id="supportEmail" 
+                  type="email" 
+                  value={settings.email || ""}
+                  onChange={(e) => updateSetting("email", e.target.value)}
+                  placeholder="support@example.ac.in"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="academicYear">Current Academic Year</Label>
-                <Select defaultValue="2025-26">
-                  <SelectTrigger id="academicYear">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="2024-25">2024-25</SelectItem>
-                    <SelectItem value="2025-26">2025-26</SelectItem>
-                    <SelectItem value="2026-27">2026-27</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="phone">Phone</Label>
+                <Input 
+                  id="phone" 
+                  value={settings.phone || ""}
+                  onChange={(e) => updateSetting("phone", e.target.value)}
+                  placeholder="+91 1234567890"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="country">Country</Label>
+                <Input 
+                  id="country" 
+                  value={settings.country}
+                  onChange={(e) => updateSetting("country", e.target.value)}
+                />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="address">Address</Label>
-              <Textarea id="address" defaultValue="Morena Link Road, Gwalior, Madhya Pradesh 474015" rows={2} />
+              <Textarea 
+                id="address" 
+                value={settings.address || ""}
+                onChange={(e) => updateSetting("address", e.target.value)}
+                placeholder="Full institution address"
+                rows={2} 
+              />
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="city">City</Label>
+                <Input 
+                  id="city" 
+                  value={settings.city || ""}
+                  onChange={(e) => updateSetting("city", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="state">State</Label>
+                <Input 
+                  id="state" 
+                  value={settings.state || ""}
+                  onChange={(e) => updateSetting("state", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pincode">Pincode</Label>
+                <Input 
+                  id="pincode" 
+                  value={settings.pincode || ""}
+                  onChange={(e) => updateSetting("pincode", e.target.value)}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -78,43 +239,102 @@ export function SystemSettings() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Database className="h-5 w-5 text-primary" />
-              Result Settings
+              Academic Settings
             </CardTitle>
-            <CardDescription>Configure result publication settings</CardDescription>
+            <CardDescription>Configure academic policies and result settings</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <Label>Auto-publish Results</Label>
-                <p className="text-sm text-slate-500">Automatically publish results after approval</p>
+                <Label>Allow Corrections</Label>
+                <p className="text-sm text-slate-500">Students can request result corrections</p>
               </div>
-              <Switch />
+              <Switch 
+                checked={settings.allowCorrections}
+                onCheckedChange={(checked) => updateSetting("allowCorrections", checked)}
+              />
             </div>
             <div className="flex items-center justify-between">
               <div>
-                <Label>Require COE Approval</Label>
-                <p className="text-sm text-slate-500">Results must be approved by Controller of Examinations</p>
+                <Label>Require Credit Validation</Label>
+                <p className="text-sm text-slate-500">Validate credit requirements for degree</p>
               </div>
-              <Switch defaultChecked />
+              <Switch 
+                checked={settings.requireCreditValidation}
+                onCheckedChange={(checked) => updateSetting("requireCreditValidation", checked)}
+              />
             </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Soulbound Degrees</Label>
+                <p className="text-sm text-slate-500">Degree NFTs cannot be transferred</p>
+              </div>
+              <Switch 
+                checked={settings.degreeSoulbound}
+                onCheckedChange={(checked) => updateSetting("degreeSoulbound", checked)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="blockchain" className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Wallet className="h-5 w-5 text-primary" />
+              Blockchain Configuration
+            </CardTitle>
+            <CardDescription>Configure blockchain network and smart contract settings</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="gradeSystem">Grading System</Label>
-                <Select defaultValue="10-point">
-                  <SelectTrigger id="gradeSystem">
+                <Label htmlFor="chainId">Chain ID</Label>
+                <Select 
+                  value={String(settings.chainId)}
+                  onValueChange={(val) => updateSetting("chainId", parseInt(val))}
+                >
+                  <SelectTrigger id="chainId">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="10-point">10-Point Scale</SelectItem>
-                    <SelectItem value="4-point">4-Point Scale</SelectItem>
-                    <SelectItem value="percentage">Percentage</SelectItem>
+                    <SelectItem value="84532">Base Sepolia (Testnet)</SelectItem>
+                    <SelectItem value="8453">Base Mainnet</SelectItem>
+                    <SelectItem value="11155111">Ethereum Sepolia (Testnet)</SelectItem>
+                    <SelectItem value="1">Ethereum Mainnet</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="passingGrade">Minimum Passing CGPA</Label>
-                <Input id="passingGrade" type="number" step="0.01" defaultValue="5.00" />
+                <Label htmlFor="rpcUrl">RPC URL</Label>
+                <Input 
+                  id="rpcUrl" 
+                  value={settings.rpcUrl || ""}
+                  onChange={(e) => updateSetting("rpcUrl", e.target.value)}
+                  placeholder="https://sepolia.base.org"
+                />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contractSemester">Semester NFT Contract Address</Label>
+              <Input 
+                id="contractSemester" 
+                value={settings.contractSemester || ""}
+                onChange={(e) => updateSetting("contractSemester", e.target.value)}
+                placeholder="0x..."
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contractDegree">Degree NFT Contract Address</Label>
+              <Input 
+                id="contractDegree" 
+                value={settings.contractDegree || ""}
+                onChange={(e) => updateSetting("contractDegree", e.target.value)}
+                placeholder="0x..."
+                className="font-mono"
+              />
             </div>
           </CardContent>
         </Card>

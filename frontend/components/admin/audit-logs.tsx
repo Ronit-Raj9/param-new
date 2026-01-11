@@ -1,17 +1,18 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Search, Download, Filter, User, FileText, Shield, Settings, Clock } from "lucide-react"
+import { useApi } from "@/hooks/use-api"
+import { Search, Download, Filter, User, FileText, Shield, Settings, Clock, Loader2, History } from "lucide-react"
 import { format } from "date-fns"
 
 interface LogEntry {
   id: string
-  timestamp: Date
+  timestamp: string
   user: string
   userRole: string
   action: string
@@ -20,88 +21,12 @@ interface LogEntry {
   ipAddress: string
 }
 
-const mockLogs: LogEntry[] = [
-  {
-    id: "1",
-    timestamp: new Date("2026-01-10T14:30:00"),
-    user: "admin@iiitm.ac.in",
-    userRole: "Super Admin",
-    action: "Published Results",
-    category: "result",
-    details: "Published Semester 6 results for BTech CSE 2023 batch",
-    ipAddress: "192.168.1.100",
-  },
-  {
-    id: "2",
-    timestamp: new Date("2026-01-10T14:15:00"),
-    user: "coe@iiitm.ac.in",
-    userRole: "COE",
-    action: "Approved Results",
-    category: "result",
-    details: "Approved Semester 6 results for verification",
-    ipAddress: "192.168.1.105",
-  },
-  {
-    id: "3",
-    timestamp: new Date("2026-01-10T13:45:00"),
-    user: "2021BCS001@iiitm.ac.in",
-    userRole: "Student",
-    action: "Generated Share Link",
-    category: "credential",
-    details: "Created verification link for Semester 5 results",
-    ipAddress: "103.25.45.78",
-  },
-  {
-    id: "4",
-    timestamp: new Date("2026-01-10T12:00:00"),
-    user: "registrar@iiitm.ac.in",
-    userRole: "Data Entry",
-    action: "Uploaded Student Data",
-    category: "admin",
-    details: "Imported 150 new students from CSV",
-    ipAddress: "192.168.1.110",
-  },
-  {
-    id: "5",
-    timestamp: new Date("2026-01-10T11:30:00"),
-    user: "admin@iiitm.ac.in",
-    userRole: "Super Admin",
-    action: "Login",
-    category: "auth",
-    details: "Successful login via OTP",
-    ipAddress: "192.168.1.100",
-  },
-  {
-    id: "6",
-    timestamp: new Date("2026-01-10T10:00:00"),
-    user: "system",
-    userRole: "System",
-    action: "Backup Completed",
-    category: "system",
-    details: "Daily automated backup completed successfully",
-    ipAddress: "127.0.0.1",
-  },
-  {
-    id: "7",
-    timestamp: new Date("2026-01-09T16:30:00"),
-    user: "verifier@company.com",
-    userRole: "External",
-    action: "Verified Credential",
-    category: "credential",
-    details: "Verified degree certificate for roll no 2020BCS045",
-    ipAddress: "203.45.67.89",
-  },
-  {
-    id: "8",
-    timestamp: new Date("2026-01-09T15:00:00"),
-    user: "admin@iiitm.ac.in",
-    userRole: "Super Admin",
-    action: "Updated Settings",
-    category: "admin",
-    details: "Modified email notification preferences",
-    ipAddress: "192.168.1.100",
-  },
-]
+interface AuditStats {
+  totalToday: number
+  authEvents: number
+  verifications: number
+  adminActions: number
+}
 
 const categoryConfig = {
   auth: { label: "Authentication", icon: Shield, color: "bg-blue-100 text-blue-700" },
@@ -112,18 +37,67 @@ const categoryConfig = {
 }
 
 export function AuditLogs() {
+  const api = useApi()
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [stats, setStats] = useState<AuditStats>({ totalToday: 0, authEvents: 0, verifications: 0, adminActions: 0 })
+  const [isLoading, setIsLoading] = useState(true)
+  const [totalCount, setTotalCount] = useState(0)
+  const [page, setPage] = useState(1)
+
   const [search, setSearch] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [dateFilter, setDateFilter] = useState<string>("all")
 
-  const filteredLogs = mockLogs.filter((log) => {
-    const matchesSearch =
-      log.user.toLowerCase().includes(search.toLowerCase()) ||
-      log.action.toLowerCase().includes(search.toLowerCase()) ||
-      log.details.toLowerCase().includes(search.toLowerCase())
-    const matchesCategory = categoryFilter === "all" || log.category === categoryFilter
-    return matchesSearch && matchesCategory
-  })
+  // Fetch audit logs
+  const fetchLogs = useCallback(async () => {
+    if (!api.isReady) return
+    
+    try {
+      setIsLoading(true)
+      const params = new URLSearchParams()
+      if (search) params.set("search", search)
+      if (categoryFilter !== "all") params.set("category", categoryFilter)
+      if (dateFilter !== "all") params.set("dateRange", dateFilter)
+      params.set("page", page.toString())
+      params.set("limit", "20")
+
+      const data = await api.get<{ success: boolean; data: { logs?: LogEntry[]; pagination?: { total: number } } }>(
+        `/v1/audit/logs?${params.toString()}`
+      )
+
+      if (data.success) {
+        setLogs(data.data.logs || [])
+        setTotalCount(data.data.pagination?.total || 0)
+      }
+    } catch (err) {
+      console.error("Error fetching audit logs:", err)
+      setLogs([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [api, search, categoryFilter, dateFilter, page])
+
+  useEffect(() => {
+    fetchLogs()
+  }, [fetchLogs])
+
+  // Fetch stats
+  useEffect(() => {
+    async function fetchStats() {
+      if (!api.isReady) return
+      
+      try {
+        const data = await api.get<{ success: boolean; data: AuditStats }>("/v1/audit/stats")
+        if (data.success) {
+          setStats(data.data)
+        }
+      } catch (err) {
+        console.error("Error fetching audit stats:", err)
+      }
+    }
+
+    fetchStats()
+  }, [api.isReady])
 
   return (
     <div className="space-y-6">
@@ -136,7 +110,7 @@ export function AuditLogs() {
                 <User className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">1,247</p>
+                <p className="text-2xl font-bold">{stats.totalToday}</p>
                 <p className="text-sm text-slate-500">Total Actions Today</p>
               </div>
             </div>
@@ -149,7 +123,7 @@ export function AuditLogs() {
                 <Shield className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">342</p>
+                <p className="text-2xl font-bold">{stats.authEvents}</p>
                 <p className="text-sm text-slate-500">Auth Events</p>
               </div>
             </div>
@@ -162,7 +136,7 @@ export function AuditLogs() {
                 <FileText className="h-5 w-5 text-purple-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">89</p>
+                <p className="text-2xl font-bold">{stats.verifications}</p>
                 <p className="text-sm text-slate-500">Verifications</p>
               </div>
             </div>
@@ -175,7 +149,7 @@ export function AuditLogs() {
                 <Settings className="h-5 w-5 text-orange-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold">15</p>
+                <p className="text-2xl font-bold">{stats.adminActions}</p>
                 <p className="text-sm text-slate-500">Admin Actions</p>
               </div>
             </div>
@@ -233,57 +207,84 @@ export function AuditLogs() {
             </Select>
           </div>
 
-          {/* Log Entries */}
-          <div className="space-y-3">
-            {filteredLogs.map((log) => {
-              const config = categoryConfig[log.category]
-              return (
-                <div
-                  key={log.id}
-                  className="flex items-start gap-4 p-4 rounded-lg border border-slate-200 bg-slate-50/50"
-                >
-                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${config.color}`}>
-                    <config.icon className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-slate-900">{log.action}</span>
-                      <Badge variant="secondary" className="text-xs">
-                        {config.label}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-slate-600 mt-0.5">{log.details}</p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                      <span className="flex items-center gap-1">
-                        <User className="h-3 w-3" />
-                        {log.user}
-                      </span>
-                      <span>{log.userRole}</span>
-                      <span>IP: {log.ipAddress}</span>
-                    </div>
-                  </div>
-                  <div className="text-xs text-slate-500 whitespace-nowrap">
-                    {format(log.timestamp, "MMM d, h:mm a")}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Pagination */}
-          <div className="flex items-center justify-between mt-6 pt-4 border-t">
-            <p className="text-sm text-slate-500">
-              Showing {filteredLogs.length} of {mockLogs.length} entries
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled>
-                Previous
-              </Button>
-              <Button variant="outline" size="sm">
-                Next
-              </Button>
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          </div>
+          )}
+
+          {/* Empty State */}
+          {!isLoading && logs.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <History className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium">No audit logs found</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {search || categoryFilter !== "all" ? "Try adjusting your filters" : "Activity logs will appear here"}
+              </p>
+            </div>
+          )}
+
+          {/* Log Entries */}
+          {!isLoading && logs.length > 0 && (
+            <>
+              <div className="space-y-3">
+                {logs.map((log) => {
+                  const config = categoryConfig[log.category] || categoryConfig.system
+                  return (
+                    <div
+                      key={log.id}
+                      className="flex items-start gap-4 p-4 rounded-lg border border-slate-200 bg-slate-50/50"
+                    >
+                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${config.color}`}>
+                        <config.icon className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-slate-900">{log.action}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {config.label}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-slate-600 mt-0.5">{log.details}</p>
+                        <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                          <span className="flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {log.user}
+                          </span>
+                          <span>{log.userRole}</span>
+                          <span>IP: {log.ipAddress}</span>
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-500 whitespace-nowrap">
+                        {format(new Date(log.timestamp), "MMM d, h:mm a")}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Pagination */}
+              <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                <p className="text-sm text-slate-500">
+                  Showing {logs.length} of {totalCount} entries
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={logs.length < 20}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

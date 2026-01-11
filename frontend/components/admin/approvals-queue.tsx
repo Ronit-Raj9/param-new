@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -16,9 +16,10 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { formatDate, formatRelativeTime } from "@/lib/format"
+import { formatRelativeTime } from "@/lib/format"
 import { useToast } from "@/hooks/use-toast"
-import { CheckCircle, XCircle, Eye, FileText, GraduationCap, AlertTriangle } from "lucide-react"
+import { useApi } from "@/hooks/use-api"
+import { CheckCircle, XCircle, Eye, FileText, GraduationCap, Loader2, ClipboardList } from "lucide-react"
 
 interface PendingItem {
   id: string
@@ -30,53 +31,41 @@ interface PendingItem {
   recordCount?: number
 }
 
-// Mock data
-const mockPendingItems: PendingItem[] = [
-  {
-    id: "1",
-    type: "results",
-    title: "B.Tech CSE 2020 - Semester 7 Results",
-    submittedBy: "Dr. Amit Kumar",
-    submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    details: "45 student results for semester 7",
-    recordCount: 45,
-  },
-  {
-    id: "2",
-    type: "results",
-    title: "B.Tech IT 2021 - Semester 5 Results",
-    submittedBy: "Prof. Meena Sharma",
-    submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-    details: "38 student results for semester 5",
-    recordCount: 38,
-  },
-  {
-    id: "3",
-    type: "degree",
-    title: "Degree Proposal - Rahul Sharma",
-    submittedBy: "Academic Office",
-    submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    details: "B.Tech CSE with CGPA 8.75",
-  },
-  {
-    id: "4",
-    type: "degree",
-    title: "Degree Proposal - Priya Patel",
-    submittedBy: "Academic Office",
-    submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    details: "B.Tech CSE with CGPA 9.12",
-  },
-]
-
 export function ApprovalsQueue() {
   const { toast } = useToast()
+  const api = useApi()
+  const [pendingItems, setPendingItems] = useState<PendingItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("all")
   const [selectedItem, setSelectedItem] = useState<PendingItem | null>(null)
   const [actionType, setActionType] = useState<"approve" | "reject" | null>(null)
   const [notes, setNotes] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const resultItems = mockPendingItems.filter((item) => item.type === "results")
-  const degreeItems = mockPendingItems.filter((item) => item.type === "degree")
+  // Fetch pending approvals
+  const fetchPendingApprovals = useCallback(async () => {
+    if (!api.isReady) return
+    
+    try {
+      setIsLoading(true)
+      const data = await api.get<{ success: boolean; data: PendingItem[] }>("/v1/approvals/pending")
+      if (data.success) {
+        setPendingItems(data.data || [])
+      }
+    } catch (err) {
+      console.error("Error fetching pending approvals:", err)
+      setPendingItems([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [api])
+
+  useEffect(() => {
+    fetchPendingApprovals()
+  }, [fetchPendingApprovals])
+
+  const resultItems = pendingItems.filter((item) => item.type === "results")
+  const degreeItems = pendingItems.filter((item) => item.type === "degree")
 
   const getDisplayItems = () => {
     switch (activeTab) {
@@ -85,7 +74,7 @@ export function ApprovalsQueue() {
       case "degrees":
         return degreeItems
       default:
-        return mockPendingItems
+        return pendingItems
     }
   }
 
@@ -94,14 +83,33 @@ export function ApprovalsQueue() {
     setActionType(action)
   }
 
-  const confirmAction = () => {
-    toast({
-      title: actionType === "approve" ? "Approved" : "Rejected",
-      description: `${selectedItem?.title} has been ${actionType === "approve" ? "approved" : "rejected"}`,
-    })
-    setSelectedItem(null)
-    setActionType(null)
-    setNotes("")
+  const confirmAction = async () => {
+    if (!selectedItem || !actionType) return
+
+    try {
+      setIsSubmitting(true)
+      const data = await api.post<{ success: boolean }>(`/v1/approvals/${selectedItem.id}/${actionType}`, { notes })
+
+      if (data.success) {
+        toast({
+          title: actionType === "approve" ? "Approved" : "Rejected",
+          description: `${selectedItem.title} has been ${actionType === "approve" ? "approved" : "rejected"}`,
+        })
+        // Remove item from list
+        setPendingItems((items) => items.filter((item) => item.id !== selectedItem.id))
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to process approval",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+      setSelectedItem(null)
+      setActionType(null)
+      setNotes("")
+    }
   }
 
   return (
@@ -126,72 +134,93 @@ export function ApprovalsQueue() {
           </div>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-4">
-              <TabsTrigger value="all">All ({mockPendingItems.length})</TabsTrigger>
-              <TabsTrigger value="results">Results ({resultItems.length})</TabsTrigger>
-              <TabsTrigger value="degrees">Degrees ({degreeItems.length})</TabsTrigger>
-            </TabsList>
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          )}
 
-            <TabsContent value={activeTab}>
-              <div className="rounded-lg border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[50px]">Type</TableHead>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Submitted By</TableHead>
-                      <TableHead>Submitted</TableHead>
-                      <TableHead>Details</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {getDisplayItems().map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          {item.type === "results" ? (
-                            <FileText className="h-5 w-5 text-info" />
-                          ) : (
-                            <GraduationCap className="h-5 w-5 text-primary" />
-                          )}
-                        </TableCell>
-                        <TableCell className="font-medium">{item.title}</TableCell>
-                        <TableCell>{item.submittedBy}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatRelativeTime(item.submittedAt)}
-                        </TableCell>
-                        <TableCell className="text-sm">{item.details}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-success hover:text-success"
-                              onClick={() => handleAction(item, "approve")}
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => handleAction(item, "reject")}
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+          {/* Empty State */}
+          {!isLoading && pendingItems.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <ClipboardList className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium">No pending approvals</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                All items have been reviewed
+              </p>
+            </div>
+          )}
+
+          {/* Content */}
+          {!isLoading && pendingItems.length > 0 && (
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="mb-4">
+                <TabsTrigger value="all">All ({pendingItems.length})</TabsTrigger>
+                <TabsTrigger value="results">Results ({resultItems.length})</TabsTrigger>
+                <TabsTrigger value="degrees">Degrees ({degreeItems.length})</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value={activeTab}>
+                <div className="rounded-lg border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[50px]">Type</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Submitted By</TableHead>
+                        <TableHead>Submitted</TableHead>
+                        <TableHead>Details</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-          </Tabs>
+                    </TableHeader>
+                    <TableBody>
+                      {getDisplayItems().map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            {item.type === "results" ? (
+                              <FileText className="h-5 w-5 text-info" />
+                            ) : (
+                              <GraduationCap className="h-5 w-5 text-primary" />
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium">{item.title}</TableCell>
+                          <TableCell>{item.submittedBy}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatRelativeTime(item.submittedAt)}
+                          </TableCell>
+                          <TableCell className="text-sm">{item.details}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-success hover:text-success"
+                                onClick={() => handleAction(item, "approve")}
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => handleAction(item, "reject")}
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
         </CardContent>
       </Card>
 
@@ -199,57 +228,37 @@ export function ApprovalsQueue() {
       <Dialog open={!!selectedItem && !!actionType} onOpenChange={() => setSelectedItem(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {actionType === "approve" ? (
-                <CheckCircle className="h-5 w-5 text-success" />
-              ) : (
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-              )}
-              {actionType === "approve" ? "Approve" : "Reject"}{" "}
-              {selectedItem?.type === "results" ? "Results" : "Degree"}
+            <DialogTitle>
+              {actionType === "approve" ? "Approve" : "Reject"} {selectedItem?.title}
             </DialogTitle>
             <DialogDescription>
               {actionType === "approve"
-                ? `Are you sure you want to approve "${selectedItem?.title}"?`
-                : `Please provide a reason for rejecting "${selectedItem?.title}".`}
+                ? "This will approve and publish the selected item."
+                : "This will reject the item and notify the submitter."}
             </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="p-4 rounded-lg bg-muted">
-              <p className="font-medium">{selectedItem?.title}</p>
-              <p className="text-sm text-muted-foreground mt-1">{selectedItem?.details}</p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Submitted by {selectedItem?.submittedBy} on{" "}
-                {selectedItem?.submittedAt && formatDate(selectedItem.submittedAt)}
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes">{actionType === "approve" ? "Notes (optional)" : "Rejection Reason"}</Label>
-              <Textarea
-                id="notes"
-                placeholder={
-                  actionType === "approve"
-                    ? "Add any notes for the record..."
-                    : "Please explain why this is being rejected..."
-                }
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-              />
-            </div>
+          <div className="py-4">
+            <Label htmlFor="notes">Notes (Optional)</Label>
+            <Textarea
+              id="notes"
+              placeholder="Add any notes or comments..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="mt-2"
+            />
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedItem(null)} className="bg-transparent">
+            <Button variant="outline" onClick={() => setSelectedItem(null)} disabled={isSubmitting}>
               Cancel
             </Button>
             <Button
-              variant={actionType === "approve" ? "default" : "destructive"}
               onClick={confirmAction}
-              disabled={actionType === "reject" && !notes.trim()}
+              variant={actionType === "approve" ? "default" : "destructive"}
+              disabled={isSubmitting}
             >
+              {isSubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
               {actionType === "approve" ? "Approve" : "Reject"}
             </Button>
           </DialogFooter>
