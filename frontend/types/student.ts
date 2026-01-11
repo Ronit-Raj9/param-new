@@ -22,10 +22,25 @@ export interface Student {
   updatedAt: string
 }
 
-export type StudentStatus = "ACTIVE" | "GRADUATED" | "WITHDRAWN" | "SUSPENDED"
+export type StudentStatus = 
+  | "PENDING_ACTIVATION" 
+  | "ACTIVE" 
+  | "LEAVE_OF_ABSENCE" 
+  | "REPEAT_YEAR" 
+  | "DROPPED_OUT" 
+  | "EARLY_EXIT" 
+  | "GRADUATED"
 
 // Import ResultStatus from result.ts when needed
-export const STUDENT_STATUSES: StudentStatus[] = ["ACTIVE", "GRADUATED", "WITHDRAWN", "SUSPENDED"]
+export const STUDENT_STATUSES: StudentStatus[] = [
+  "PENDING_ACTIVATION",
+  "ACTIVE", 
+  "LEAVE_OF_ABSENCE",
+  "REPEAT_YEAR",
+  "DROPPED_OUT",
+  "EARLY_EXIT",
+  "GRADUATED"
+]
 
 // Note: ResultStatus is imported from result.ts
 // Use: import { ResultStatus } from './result' when needed

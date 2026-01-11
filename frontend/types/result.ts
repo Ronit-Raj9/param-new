@@ -1,4 +1,4 @@
-export type ResultStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "PUBLISHED" | "WITHHELD" | "REJECTED"
+export type ResultStatus = "DRAFT" | "REVIEWED" | "APPROVED" | "ISSUED" | "WITHHELD"
 
 export interface SemesterResult {
   id: string
@@ -16,6 +16,13 @@ export interface SemesterResult {
   approvedAt?: string
   createdAt: string
   updatedAt: string
+  // Blockchain/Minting info
+  credential?: {
+    id: string
+    tokenId?: string | null
+    txHash?: string | null
+    status: string
+  } | null
 }
 
 export interface SubjectResult {

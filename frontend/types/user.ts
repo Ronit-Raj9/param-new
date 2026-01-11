@@ -1,15 +1,17 @@
-import type { UserRole } from "./auth"
+import type { UserRole, UserStatus } from "./auth"
 
 export interface UserProfile {
   id: string
   name: string
   email: string
   role: UserRole
+  status: UserStatus
   profilePicture?: string
+  avatarUrl?: string
   phone?: string
   address?: string
-  isActive: boolean
-  lastLogin?: string
+  activatedAt?: string
+  lastLoginAt?: string
   createdAt: string
   updatedAt: string
 }
@@ -25,5 +27,5 @@ export interface UpdateUserInput {
   name?: string
   phone?: string
   address?: string
-  isActive?: boolean
+  status?: UserStatus
 }

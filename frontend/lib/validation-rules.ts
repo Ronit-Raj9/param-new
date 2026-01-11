@@ -15,19 +15,11 @@ export const enrollmentNumberSchema = z
   .regex(/^[A-Z0-9]+$/, "Enrollment number must contain only uppercase letters and numbers")
 
 /**
- * Email validation (institutional domain)
+ * Email validation (all domains allowed)
  */
 export const institutionalEmailSchema = z
   .string()
   .email("Invalid email address")
-  .refine(
-    (email) => {
-      const allowedDomains = ["iiitm.ac.in", "iiitm.edu.in"]
-      const domain = email.split("@")[1]?.toLowerCase()
-      return allowedDomains.includes(domain)
-    },
-    { message: "Email must be from institutional domain (@iiitm.ac.in or @iiitm.edu.in)" }
-  )
 
 /**
  * Batch year validation

@@ -1,47 +1,40 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
+/**
+ * GET /api/me
+ * This route proxies to the backend /api/v1/auth/me endpoint.
+ * 
+ * In production, this is handled by Next.js rewrites in next.config.mjs.
+ * This route is a fallback for when the backend is unavailable.
+ */
 export async function GET(request: NextRequest) {
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api"
+  
+  // Try cookie-based authentication first
   const sessionCookie = request.cookies.get("session")
-  const roleCookie = request.cookies.get("user_role")
-
-  if (!sessionCookie) {
-    return NextResponse.json({ message: "Not authenticated" }, { status: 401 })
+  
+  try {
+    const response = await fetch(`${backendUrl}/v1/auth/me`, {
+      headers: {
+        "Content-Type": "application/json",
+        "Cookie": sessionCookie ? `session=${sessionCookie.value}` : "",
+      },
+      credentials: "include",
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      return NextResponse.json(data.data?.user || data.data || data)
+    }
+    
+    if (response.status === 401) {
+      return NextResponse.json({ message: "Not authenticated" }, { status: 401 })
+    }
+    
+    return NextResponse.json({ message: "Authentication failed" }, { status: response.status })
+  } catch (error) {
+    console.error("Error fetching user from backend:", error)
+    return NextResponse.json({ message: "Backend unavailable" }, { status: 503 })
   }
-
-  // In production, validate session token and fetch user from database
-  // For demo, return mock user based on role cookie
-  const role = roleCookie?.value || "STUDENT"
-
-  const mockUsers = {
-    STUDENT: {
-      id: "student-1",
-      name: "Rahul Sharma",
-      email: "rahul.sharma@iiitm.ac.in",
-      role: "STUDENT",
-      enrollmentNumber: "2020BCS001",
-      isActive: true,
-      createdAt: "2020-08-01T00:00:00Z",
-    },
-    ADMIN: {
-      id: "admin-1",
-      name: "Dr. Admin User",
-      email: "admin@iiitm.ac.in",
-      role: "ADMIN",
-      isActive: true,
-      createdAt: "2019-01-01T00:00:00Z",
-    },
-    ACADEMIC: {
-      id: "academic-1",
-      name: "Prof. Academic Staff",
-      email: "academic@iiitm.ac.in",
-      role: "ACADEMIC",
-      isActive: true,
-      createdAt: "2019-01-01T00:00:00Z",
-    },
-  }
-
-  const user = mockUsers[role as keyof typeof mockUsers] || mockUsers.STUDENT
-
-  return NextResponse.json(user)
 }

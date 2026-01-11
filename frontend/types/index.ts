@@ -24,3 +24,6 @@ export * from "./job"
 
 // Export from api last (has ApiError and PaginatedResponse that might conflict)
 export type { ApiResponse, ApiError, PaginatedResponse, SearchParams, PaginationParams, ApiListResponse } from "./api"
+
+// Re-export UserStatus explicitly for convenience
+export type { UserStatus } from "./auth"
