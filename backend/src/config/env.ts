@@ -19,11 +19,12 @@ const envSchema = z.object({
   // Redis
   REDIS_URL: z.string().default("redis://localhost:6379"),
 
-  // Privy
+  // Privy Authentication & Wallets
   PRIVY_APP_ID: z.string().min(1),
   PRIVY_APP_SECRET: z.string().min(1),
   PRIVY_VERIFICATION_KEY: z.string().optional(),
-  PRIVY_WALLET_ID: z.string().optional(),
+  PRIVY_WALLET_ID: z.string().optional(), // Legacy - use PRIVY_ADMIN_WALLET_ID
+  PRIVY_ADMIN_WALLET_ID: z.string().optional(), // Wallet ID for signing mint transactions (from Privy dashboard)
 
   // Blockchain (Base Chain)
   CHAIN_ID: z.string().default("84532").transform(Number),
@@ -31,7 +32,7 @@ const envSchema = z.object({
   BLOCKCHAIN_RPC_URL: z.string().url().optional(),
   BLOCKCHAIN_CHAIN_ID: z.string().default("84532").transform(Number),
   BLOCKCHAIN_PRIVATE_KEY: z.string().optional(),
-  MINTER_PRIVATE_KEY: z.string().optional(), // Private key for minting NFTs
+  MINTER_PRIVATE_KEY: z.string().optional(), // Fallback: raw private key for minting (NOT recommended for production)
   NFT_CONTRACT_ADDRESS: z.string().optional(),
   BLOCK_EXPLORER_URL: z.string().url().default("https://sepolia.basescan.org"),
   SEMESTER_NFT_CONTRACT: z.string().optional(),
@@ -68,13 +69,13 @@ const envSchema = z.object({
 // Parse and validate environment
 const parseEnv = () => {
   const result = envSchema.safeParse(process.env);
-  
+
   if (!result.success) {
     console.error("❌ Invalid environment variables:");
     console.error(result.error.format());
     process.exit(1);
   }
-  
+
   return result.data;
 };
 
