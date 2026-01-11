@@ -1,60 +1,54 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ShareLinkManager } from "@/components/credentials/share-link-manager"
+import { useApi } from "@/hooks/use-api"
 import { formatDate, formatGPA } from "@/lib/format"
-import { GraduationCap, Download, Share2, CheckCircle2, Clock } from "lucide-react"
+import { GraduationCap, Download, Share2, CheckCircle2, Clock, Loader2 } from "lucide-react"
 import type { Credential, ShareLink } from "@/types"
 
-// Mock data
-const mockDegree: Credential | null = {
-  id: "deg-1",
-  tokenId: "0x123abc456def",
-  type: "DEGREE",
-  studentId: "1",
-  studentName: "Rahul Sharma",
-  enrollmentNumber: "2020BCS001",
-  program: "B.Tech Computer Science & Engineering",
-  batch: "2020-2024",
-  status: "VALID",
-  issuedAt: "2024-06-30T10:00:00Z",
-  issuer: "IIITM Gwalior",
-  metadata: {
-    cgpa: 8.75,
-    division: "First Class with Distinction",
-    specialization: "Artificial Intelligence",
-  },
-}
-
-const mockShareLinks: ShareLink[] = [
-  {
-    id: "1",
-    credentialId: "deg-1",
-    token: "abc123",
-    url: "https://param.iiitm.ac.in/verify/abc123",
-    expiresAt: "2025-01-01T00:00:00Z",
-    viewCount: 12,
-    isActive: true,
-    createdAt: "2024-07-01T10:00:00Z",
-  },
-  {
-    id: "2",
-    credentialId: "deg-1",
-    token: "def456",
-    url: "https://param.iiitm.ac.in/verify/def456",
-    viewCount: 5,
-    isActive: true,
-    createdAt: "2024-07-15T10:00:00Z",
-  },
-]
-
 export function DegreePage() {
+  const api = useApi()
+  const [degree, setDegree] = useState<Credential | null>(null)
+  const [shareLinks, setShareLinks] = useState<ShareLink[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [showShareManager, setShowShareManager] = useState(false)
-  const degree = mockDegree
+
+  useEffect(() => {
+    async function fetchDegree() {
+      if (!api.isReady) return
+      
+      try {
+        setIsLoading(true)
+        const data = await api.get<{ success: boolean; data: { degree: Credential | null; shareLinks: ShareLink[] } }>(
+          "/v1/credentials/degree"
+        )
+
+        if (data.success && data.data) {
+          setDegree(data.data.degree || null)
+          setShareLinks(data.data.shareLinks || [])
+        }
+      } catch (err) {
+        console.error("Error fetching degree:", err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchDegree()
+  }, [api.isReady])
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   if (!degree) {
     return (
@@ -68,10 +62,6 @@ export function DegreePage() {
             Your degree certificate will be available after your final semester results are published and approved by
             the examination committee.
           </p>
-          <div className="mt-6 p-4 rounded-lg bg-muted/50 max-w-xs mx-auto">
-            <p className="text-sm text-muted-foreground">Expected Availability</p>
-            <p className="font-semibold">June 2024</p>
-          </div>
         </CardContent>
       </Card>
     )
@@ -103,7 +93,7 @@ export function DegreePage() {
               <p className="font-medium">{degree.studentName}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Enrollment Number</p>
+              <p className="text-sm text-muted-foreground">Enrollment No.</p>
               <p className="font-medium font-mono">{degree.enrollmentNumber}</p>
             </div>
             <div>
@@ -111,88 +101,84 @@ export function DegreePage() {
               <p className="font-medium">{degree.batch}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Issue Date</p>
-              <p className="font-medium">{formatDate(degree.issuedAt)}</p>
+              <p className="text-sm text-muted-foreground">Issued On</p>
+              <p className="font-medium">{degree.issuedAt ? formatDate(degree.issuedAt) : "-"}</p>
             </div>
           </div>
 
-          <Separator className="my-6" />
+          {degree.metadata && (
+            <>
+              <Separator className="my-4" />
+              <div className="grid gap-4 sm:grid-cols-3">
+                {degree.metadata.cgpa && (
+                  <div className="text-center p-4 rounded-lg bg-muted/50">
+                    <p className="text-sm text-muted-foreground">Final CGPA</p>
+                    <p className="text-2xl font-bold text-primary">{formatGPA(degree.metadata.cgpa)}</p>
+                  </div>
+                )}
+                {degree.metadata.division && (
+                  <div className="text-center p-4 rounded-lg bg-muted/50">
+                    <p className="text-sm text-muted-foreground">Division</p>
+                    <p className="text-lg font-semibold">{degree.metadata.division}</p>
+                  </div>
+                )}
+                {degree.metadata.specialization && (
+                  <div className="text-center p-4 rounded-lg bg-muted/50">
+                    <p className="text-sm text-muted-foreground">Specialization</p>
+                    <p className="text-lg font-semibold">{degree.metadata.specialization}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="text-center p-4 rounded-lg bg-muted/50">
-              <p className="text-sm text-muted-foreground">Final CGPA</p>
-              <p className="text-3xl font-bold text-primary">{formatGPA(degree.metadata?.cgpa)}</p>
-            </div>
-            <div className="text-center p-4 rounded-lg bg-muted/50">
-              <p className="text-sm text-muted-foreground">Division</p>
-              <p className="font-semibold">{degree.metadata?.division}</p>
-            </div>
-            <div className="text-center p-4 rounded-lg bg-muted/50">
-              <p className="text-sm text-muted-foreground">Specialization</p>
-              <p className="font-semibold">{degree.metadata?.specialization || "N/A"}</p>
-            </div>
-          </div>
+          <Separator className="my-4" />
 
-          <Separator className="my-6" />
-
-          <div className="flex flex-wrap gap-3">
-            <Button>
-              <Download className="mr-2 h-4 w-4" />
-              Download Degree
-            </Button>
-            <Button variant="outline" className="bg-transparent">
-              <Download className="mr-2 h-4 w-4" />
-              Download Transcript
-            </Button>
-            <Button variant="outline" onClick={() => setShowShareManager(!showShareManager)} className="bg-transparent">
+          <div className="flex gap-3">
+            <Button variant="outline" className="bg-transparent" onClick={() => setShowShareManager(!showShareManager)}>
               <Share2 className="mr-2 h-4 w-4" />
               {showShareManager ? "Hide Share Links" : "Manage Share Links"}
             </Button>
+            <Button>
+              <Download className="mr-2 h-4 w-4" />
+              Download Certificate
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Share Links Manager */}
+      {/* Blockchain Verification */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Blockchain Verification</CardTitle>
+          <CardDescription>This credential is securely stored on the blockchain</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-sm text-muted-foreground">Token ID</p>
+              <p className="font-mono text-sm break-all">{degree.tokenId || "Not minted"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Status</p>
+              <Badge variant={degree.status === "VALID" ? "default" : "secondary"}>{degree.status}</Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Share Links */}
       {showShareManager && (
         <Card>
           <CardHeader>
-            <CardTitle>Share Links</CardTitle>
-            <CardDescription>Manage verification links for your degree certificate</CardDescription>
+            <CardTitle className="text-lg">Share Links</CardTitle>
+            <CardDescription>Manage verification links for this credential</CardDescription>
           </CardHeader>
           <CardContent>
-            <ShareLinkManager links={mockShareLinks} credentialId={degree.id} />
+            <ShareLinkManager links={shareLinks} credentialId={degree.id} />
           </CardContent>
         </Card>
       )}
-
-      {/* Credential Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Credential Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-2 text-sm">
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-muted-foreground">Credential ID</span>
-              <span className="font-mono">{degree.tokenId}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-muted-foreground">Credential Type</span>
-              <span>{degree.type}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-muted-foreground">Status</span>
-              <Badge variant="default" className="bg-success">
-                {degree.status}
-              </Badge>
-            </div>
-            <div className="flex justify-between py-2">
-              <span className="text-muted-foreground">Issued By</span>
-              <span>{degree.issuer}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

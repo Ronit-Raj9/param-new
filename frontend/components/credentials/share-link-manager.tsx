@@ -8,17 +8,21 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { CreateShareLinkModal } from "@/components/modals/share-link-modal"
 import { formatDate, formatRelativeTime } from "@/lib/format"
 import { useToast } from "@/hooks/use-toast"
+import { useApi } from "@/hooks/use-api"
 import { Copy, MoreHorizontal, Trash2, ExternalLink, Plus } from "lucide-react"
 import type { ShareLink } from "@/types"
 
 interface ShareLinkManagerProps {
   links: ShareLink[]
   credentialId: string
+  onLinksChange?: () => void
 }
 
-export function ShareLinkManager({ links, credentialId }: ShareLinkManagerProps) {
+export function ShareLinkManager({ links, credentialId, onLinksChange }: ShareLinkManagerProps) {
   const { toast } = useToast()
+  const api = useApi()
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [revoking, setRevoking] = useState<string | null>(null)
 
   const handleCopyLink = async (url: string) => {
     await navigator.clipboard.writeText(url)
@@ -28,12 +32,29 @@ export function ShareLinkManager({ links, credentialId }: ShareLinkManagerProps)
     })
   }
 
-  const handleRevoke = (linkId: string) => {
-    // In production, call API to revoke link
-    toast({
-      title: "Link revoked",
-      description: "The share link has been deactivated",
-    })
+  const handleRevoke = async (linkId: string) => {
+    try {
+      setRevoking(linkId)
+      await api.delete(`/v1/credentials/shares/${linkId}`)
+      toast({
+        title: "Link revoked",
+        description: "The share link has been deactivated",
+      })
+      onLinksChange?.()
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to revoke share link",
+        variant: "destructive",
+      })
+    } finally {
+      setRevoking(null)
+    }
+  }
+
+  const handleModalClose = () => {
+    setShowCreateModal(false)
+    onLinksChange?.()
   }
 
   return (
@@ -119,7 +140,7 @@ export function ShareLinkManager({ links, credentialId }: ShareLinkManagerProps)
 
       <CreateShareLinkModal
         open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={handleModalClose}
         credentialId={credentialId}
       />
     </div>
