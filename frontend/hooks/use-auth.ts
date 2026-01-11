@@ -1,12 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { useContext } from "react"
 import { useRouter } from "next/navigation"
-import useSWR from "swr"
-import { fetcher } from "@/lib/api"
+import { usePrivy, useLogout } from "@privy-io/react-auth"
 import type { User } from "@/types"
 
+// Re-export AuthState from auth-provider for backward compatibility
 export interface AuthState {
   user: User | null
   isLoading: boolean
@@ -16,69 +15,23 @@ export interface AuthState {
   refetch: () => void
 }
 
+// Re-export useAuth from auth-provider
+export { useAuth } from "@/providers/auth-provider"
+
 /**
- * Authentication hook
- * Provides user state and authentication methods
- * 
- * @example
- * ```tsx
- * const { user, isAuthenticated, logout } = useAuth()
- * 
- * if (!isAuthenticated) {
- *   return <LoginPrompt />
- * }
- * ```
+ * Hook to get Privy auth state directly
+ * Use this when you need raw Privy state without backend sync
  */
-export function useAuth(): AuthState {
-  const router = useRouter()
-
-  const {
-    data: user,
-    error,
-    isLoading,
-    mutate,
-  } = useSWR<User>("/api/me", fetcher, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: true,
-    shouldRetryOnError: false,
-  })
-
-  const isAuthenticated = React.useMemo(() => {
-    return !!user && !error
-  }, [user, error])
-
-  const login = React.useCallback(() => {
-    router.push("/login")
-  }, [router])
-
-  const logout = React.useCallback(async () => {
-    try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      })
-    } catch (err) {
-      console.error("Logout error:", err)
-    }
-
-    // Clear user data
-    mutate(undefined, false)
-
-    // Redirect to login
-    router.push("/login")
-  }, [mutate, router])
-
-  const refetch = React.useCallback(() => {
-    mutate()
-  }, [mutate])
-
+export function usePrivyAuth() {
+  const { ready, authenticated, user, getAccessToken } = usePrivy()
+  const { logout } = useLogout()
+  
   return {
-    user: user || null,
-    isLoading,
-    isAuthenticated,
-    login,
+    ready,
+    authenticated,
+    user,
+    getAccessToken,
     logout,
-    refetch,
   }
 }
 
@@ -91,6 +44,7 @@ export function useAuth(): AuthState {
  * ```
  */
 export function useHasRole(roles: string[]): boolean {
+  const { useAuth } = require("@/providers/auth-provider")
   const { user } = useAuth()
   
   if (!user) return false
@@ -115,6 +69,7 @@ export function useHasRole(roles: string[]): boolean {
  */
 export function useRequireAuth(redirectTo: string = "/login"): { isLoading: boolean } {
   const router = useRouter()
+  const { useAuth } = require("@/providers/auth-provider")
   const { isAuthenticated, isLoading } = useAuth()
 
   React.useEffect(() => {
@@ -146,6 +101,7 @@ export function useRequireRole(
   redirectTo: string = "/"
 ): { isLoading: boolean; hasAccess: boolean } {
   const router = useRouter()
+  const { useAuth } = require("@/providers/auth-provider")
   const { user, isLoading, isAuthenticated } = useAuth()
 
   const hasAccess = React.useMemo(() => {

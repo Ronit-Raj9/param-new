@@ -78,7 +78,7 @@ export const studentsApi = {
     formData.append("programId", programId)
     formData.append("batch", batch)
 
-    return fetch("/api/admin/students/upload", {
+    return fetch("/api/admin/students/bulk", {
       method: "POST",
       credentials: "include",
       body: formData,
@@ -120,7 +120,7 @@ export const resultsApi = {
     formData.append("batch", batch)
     formData.append("semester", semester.toString())
 
-    return fetch("/api/admin/results/upload", {
+    return fetch("/api/admin/results/bulk", {
       method: "POST",
       credentials: "include",
       body: formData,
@@ -213,17 +213,55 @@ export const degreesApi = {
 // ===== Issuance =====
 export const issuanceApi = {
   getEligible: (programId: string, batch: string, type: string) =>
-    fetcher<Student[]>(
+    fetcher<Array<{
+      studentId: string;
+      studentName: string;
+      enrollmentNumber: string;
+      programName: string;
+      semester?: number;
+      sgpa?: number;
+      semesterResultId?: string;
+      cgpa?: number;
+      totalCredits?: number;
+      degreeProposalId?: string;
+    }>>(
       `/api/admin/issuance/eligible?programId=${programId}&batch=${batch}&type=${type}`
     ),
 
-  issue: (studentIds: string[], credentialType: string) =>
-    apiPost<{ jobId: string }>("/api/admin/issuance", {
-      studentIds,
-      credentialType,
-    }),
+  issueSingle: (data: {
+    studentId: string;
+    type: "SEMESTER" | "DEGREE";
+    semesterResultId?: string;
+    degreeProposalId?: string;
+  }) =>
+    apiPost<{ credentialId: string; jobId: string }>("/api/admin/issuance/single", data),
 
-  getJob: (jobId: string) => fetcher<Job>(`/api/admin/jobs/${jobId}`),
+  issueBulk: (credentialIds: string[]) =>
+    apiPost<{ jobId: string; totalQueued: number; errors: Array<{ credentialId: string; error: string }> }>(
+      "/api/admin/issuance/bulk",
+      { credentialIds }
+    ),
+
+  estimateGas: (credentialIds: string[]) =>
+    apiPost<{
+      totalGasEstimate: string;
+      gasPrice: string;
+      estimatedCostWei: string;
+      estimatedCostEth: string;
+      perCredential: Array<{ credentialId: string; gasEstimate: string; error?: string }>;
+    }>("/api/admin/issuance/estimate-gas", { credentialIds }),
+
+  listJobs: (params?: { type?: string; status?: string; page?: number; limit?: number }) =>
+    fetcher<PaginatedResponse<Job>>(
+      `/api/admin/issuance/jobs?${new URLSearchParams(params as Record<string, string>)}`
+    ),
+
+  getJob: (jobId: string) => fetcher<Job>(`/api/admin/issuance/jobs/${jobId}`),
+
+  getQueueStats: () =>
+    fetcher<{ queued: number; processing: number; completed: number; failed: number }>(
+      "/api/admin/issuance/queue-stats"
+    ),
 }
 
 // ===== Corrections =====
@@ -317,10 +355,22 @@ export const exportApi = {
 // ===== Settings =====
 export const settingsApi = {
   get: () =>
-    fetcher<Record<string, unknown>>("/api/admin/settings"),
+    fetcher<{
+      college: Record<string, unknown> | null
+      approvals: Array<Record<string, unknown>>
+    }>("/api/admin/settings"),
 
-  update: (data: Record<string, unknown>) =>
-    apiPatch<Record<string, unknown>>("/api/admin/settings", data),
+  getCollege: () =>
+    fetcher<Record<string, unknown>>("/api/admin/settings/college"),
+
+  updateCollege: (data: Record<string, unknown>) =>
+    apiPatch<Record<string, unknown>>("/api/admin/settings/college", data),
+
+  getApprovalSettings: (type: string) =>
+    fetcher<Record<string, unknown>>(`/api/admin/settings/approvals/${type}`),
+
+  updateApprovalSettings: (type: string, data: Record<string, unknown>) =>
+    apiPatch<Record<string, unknown>>(`/api/admin/settings/approvals/${type}`, data),
 }
 
 // ===== Dashboard =====
@@ -330,6 +380,13 @@ export const dashboardApi = {
       profile: Student
       latestResult: SemesterResult | null
       degreeStatus: Credential | null
+      credentials: Credential[]
+      activeShares: Array<{
+        id: string
+        token: string
+        expiresAt: string | null
+        credential: { type: string }
+      }>
       announcements: Array<{ id: string; title: string; content: string }>
     }>("/api/student/dashboard"),
 
@@ -337,6 +394,7 @@ export const dashboardApi = {
     fetcher<{
       stats: {
         totalStudents: number
+        activeStudents: number
         resultsPublished: number
         credentialsIssued: number
         activeShares: number
@@ -348,4 +406,11 @@ export const dashboardApi = {
       }
       recentActivity: AuditLog[]
     }>("/api/admin/dashboard/stats"),
+
+  quickStats: () =>
+    fetcher<{
+      todayLogins: number
+      pendingApprovals: number
+      issuedToday: number
+    }>("/api/admin/dashboard/quick-stats"),
 }
