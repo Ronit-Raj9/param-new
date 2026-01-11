@@ -176,3 +176,56 @@ export async function getUserStats() {
     byStatus: Object.fromEntries(byStatus.map((s) => [s.status, s._count.status])),
   };
 }
+
+/**
+ * Suspend user
+ */
+export async function suspendUser(id: string): Promise<User> {
+  const user = await prisma.user.findUnique({
+    where: { id },
+  });
+
+  if (!user) {
+    throw ApiError.notFound("User not found");
+  }
+
+  if (user.status === "SUSPENDED") {
+    throw ApiError.badRequest("User is already suspended");
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id },
+    data: { status: "SUSPENDED" },
+  });
+
+  logger.info({ userId: id }, "User suspended");
+  return updatedUser;
+}
+
+/**
+ * Activate user
+ */
+export async function activateUser(id: string): Promise<User> {
+  const user = await prisma.user.findUnique({
+    where: { id },
+  });
+
+  if (!user) {
+    throw ApiError.notFound("User not found");
+  }
+
+  if (user.status === "ACTIVE") {
+    throw ApiError.badRequest("User is already active");
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id },
+    data: { 
+      status: "ACTIVE",
+      ...(!user.activatedAt && { activatedAt: new Date() }),
+    },
+  });
+
+  logger.info({ userId: id }, "User activated");
+  return updatedUser;
+}

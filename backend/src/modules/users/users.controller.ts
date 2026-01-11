@@ -133,3 +133,54 @@ export const getUserStats = asyncHandler(async (_req: Request, res: Response) =>
     data: stats,
   });
 });
+
+/**
+ * POST /api/v1/users/:id/suspend
+ * Suspend a user
+ */
+export const suspendUser = asyncHandler(async (req: Request, res: Response) => {
+  const { params } = getUserSchema.parse({ params: req.params });
+  
+  const user = await usersService.suspendUser(params.id);
+  
+  await createAuditLog({
+    action: "USER_DEACTIVATED",
+    actorId: req.user!.id,
+    actorRole: req.user!.role,
+    entityType: "User",
+    entityId: params.id,
+    description: "User suspended",
+    metadata: { email: user.email, newStatus: "SUSPENDED" },
+    ipAddress: req.ip,
+  });
+
+  res.json({
+    success: true,
+    data: user,
+  });
+});
+
+/**
+ * POST /api/v1/users/:id/activate
+ * Activate a user
+ */
+export const activateUser = asyncHandler(async (req: Request, res: Response) => {
+  const { params } = getUserSchema.parse({ params: req.params });
+  
+  const user = await usersService.activateUser(params.id);
+  
+  await createAuditLog({
+    action: "USER_ACTIVATED",
+    actorId: req.user!.id,
+    actorRole: req.user!.role,
+    entityType: "User",
+    entityId: params.id,
+    metadata: { email: user.email },
+    ipAddress: req.ip,
+  });
+
+  res.json({
+    success: true,
+    data: user,
+  });
+});

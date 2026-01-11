@@ -14,5 +14,7 @@ router.post("/", usersController.createUser);
 router.get("/:id", usersController.getUser);
 router.patch("/:id", usersController.updateUser);
 router.delete("/:id", usersController.deleteUser);
+router.post("/:id/suspend", usersController.suspendUser);
+router.post("/:id/activate", usersController.activateUser);
 
 export default router;
