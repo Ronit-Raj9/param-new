@@ -75,6 +75,41 @@ export const getMyCredentials = asyncHandler(async (req: Request, res: Response)
 });
 
 /**
+ * GET /api/v1/credentials/student/degree
+ * Get my degree credential (for students)
+ */
+export const getMyDegree = asyncHandler(async (req: Request, res: Response) => {
+  const student = await prisma.student.findUnique({
+    where: { userId: req.user!.id },
+  });
+
+  if (!student) {
+    res.status(404).json({
+      success: false,
+      error: { code: "NOT_FOUND", message: "Student profile not found" },
+    });
+    return;
+  }
+
+  const degree = await prisma.credential.findFirst({
+    where: {
+      studentId: student.id,
+      type: "DEGREE",
+      status: "ISSUED",
+    },
+    include: {
+      student: {
+        include: {
+          program: true,
+        },
+      },
+    },
+  });
+
+  res.json({ success: true, data: degree });
+});
+
+/**
  * POST /api/v1/credentials/:id/issue
  * Issue a credential (mark as ISSUED)
  */

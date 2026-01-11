@@ -9,9 +9,15 @@ const router = Router();
 router.get("/share/:token", credentialsController.getShareLink);
 
 // Student routes
+router.get("/student", authenticate, requireStudent, credentialsController.getMyCredentials);
+router.get("/student/degree", authenticate, requireStudent, credentialsController.getMyDegree);
+router.get("/shares", authenticate, requireStudent, credentialsController.getMyShareLinks);
+router.post("/share", authenticate, requireStudent, credentialsController.createShareLink);
+router.delete("/shares/:id", authenticate, requireStudent, credentialsController.revokeShareLink);
+
+// Legacy student routes (for backwards compatibility)
 router.get("/me", authenticate, requireStudent, credentialsController.getMyCredentials);
 router.get("/shares/me", authenticate, requireStudent, credentialsController.getMyShareLinks);
-router.post("/share", authenticate, requireStudent, credentialsController.createShareLink);
 router.delete("/share/:id", authenticate, requireStudent, credentialsController.revokeShareLink);
 
 // Admin/Academic routes

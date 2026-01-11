@@ -6,6 +6,10 @@ import * as resultsController from "./results.controller.js";
 const router = Router();
 
 // Student routes
+router.get("/student", authenticate, requireStudent, resultsController.getMyResults);
+router.post("/student/corrections", authenticate, requireStudent, resultsController.createCorrectionRequest);
+
+// Legacy student routes (for backwards compatibility)
 router.get("/me", authenticate, requireStudent, resultsController.getMyResults);
 router.post("/corrections", authenticate, requireStudent, resultsController.createCorrectionRequest);
 

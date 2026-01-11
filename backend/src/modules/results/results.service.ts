@@ -361,6 +361,15 @@ export async function getStudentResults(studentId: string) {
         },
         orderBy: { course: { code: "asc" } },
       },
+      credential: {
+        select: {
+          id: true,
+          tokenId: true,
+          txHash: true,
+          status: true,
+          contractAddress: true,
+        },
+      },
     },
     orderBy: { semester: "asc" },
   });
