@@ -7,8 +7,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ===========================================
@@ -120,6 +121,7 @@ enum JobType {
   BLOCKCHAIN_MINT_SEMESTER
   BLOCKCHAIN_MINT_DEGREE
   BLOCKCHAIN_REVOKE
+  WALLET_CREATE
   EMAIL_SEND
 }
 
@@ -259,10 +261,16 @@ model Student {
   corrections       CorrectionRequest[] @relation("CorrectionStudent")
   shareLinks        ShareLink[]
   
+  // Wallet (Privy-managed, student never controls this)
+  walletAddress     String?       // Ethereum address for receiving credentials
+  walletId          String?       // Privy wallet ID
+  walletCreatedAt   DateTime?     // When wallet was created
+  
   @@index([enrollmentNumber])
   @@index([programId])
   @@index([batch])
   @@index([status])
+  @@index([walletAddress])
   @@map("students")
 }
 
