@@ -25,13 +25,15 @@ export function ResultsList() {
   useEffect(() => {
     async function fetchResults() {
       if (!api.isReady) return
-      
+
       try {
         setIsLoading(true)
-        const data = await api.get<{ success: boolean; data: SemesterResult[] }>("/v1/results/my-results")
+        const data = await api.get<{ success: boolean; data: { results: SemesterResult[]; cgpa: number } }>(
+          "/v1/results/student",
+        )
 
-        if (data.success) {
-          setResults(data.data || [])
+        if (data.success && data.data) {
+          setResults(data.data.results || [])
         }
       } catch (err) {
         console.error("Error fetching results:", err)
@@ -131,8 +133,8 @@ export function ResultsList() {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             {result.credential?.tokenId ? (
-                              <Badge 
-                                variant="default" 
+                              <Badge
+                                variant="default"
                                 className="bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
                                 onClick={() => {
                                   if (result.credential?.txHash) {
@@ -155,9 +157,9 @@ export function ResultsList() {
                             )}
                           </TooltipTrigger>
                           <TooltipContent>
-                            {result.credential?.tokenId 
-                              ? `Token ID: ${result.credential.tokenId}` 
-                              : result.status === "ISSUED" 
+                            {result.credential?.tokenId
+                              ? `Token ID: ${result.credential.tokenId}`
+                              : result.status === "ISSUED"
                                 ? "Waiting to be minted on blockchain"
                                 : "Not yet issued"}
                           </TooltipContent>

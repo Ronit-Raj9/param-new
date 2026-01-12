@@ -4,11 +4,11 @@ import { createLogger } from "../../utils/logger.js";
 import { sha256, generateToken } from "../../utils/hash.js";
 import { addDays } from "../../utils/date.js";
 import type { Credential, ShareLink, CredentialType, Prisma } from "@prisma/client";
-import type { 
-  CreateCredentialInput, 
+import type {
+  CreateCredentialInput,
   RevokeCredentialInput,
   CreateShareLinkInput,
-  ListCredentialsQuery 
+  ListCredentialsQuery
 } from "./credentials.schema.js";
 
 const logger = createLogger("credentials-service");
@@ -17,7 +17,7 @@ const logger = createLogger("credentials-service");
  * Create a credential for a student
  */
 export async function createCredential(
-  input: CreateCredentialInput, 
+  input: CreateCredentialInput,
   issuedBy: string
 ): Promise<Credential> {
   // Verify student exists
@@ -103,7 +103,7 @@ export async function createCredential(
 
     const degreeProposal = await prisma.degreeProposal.findUnique({
       where: { id: input.degreeProposalId },
-      include: { 
+      include: {
         student: {
           include: { program: true },
         },
@@ -211,6 +211,10 @@ export async function getStudentCredentials(studentId: string) {
   });
 }
 
+import { queueFinalizeDegree } from "../../queues/blockchain.queue.js";
+
+// ... (existing imports)
+
 /**
  * Issue a credential (marks as ISSUED and queues for blockchain minting)
  */
@@ -222,7 +226,7 @@ export async function issueCredential(
     where: { id },
     include: { student: { include: { user: true } } },
   });
-  
+
   if (!credential) {
     throw ApiError.notFound("Credential not found");
   }
@@ -240,6 +244,14 @@ export async function issueCredential(
   });
 
   logger.info({ credentialId: id }, "Credential issued");
+
+  // BLOCKCHAIN HOOK: Finalize degree on chain (Mint NFT)
+  if (credential.type === "DEGREE" && credential.degreeProposalId) {
+    queueFinalizeDegree(credential.degreeProposalId).catch((err) =>
+      logger.error({ err, credentialId: id }, "Failed to queue degree finalization")
+    );
+  }
+
   return updated;
 }
 
@@ -258,7 +270,7 @@ export async function updateCredentialBlockchainData(
   }
 ): Promise<Credential> {
   const credential = await prisma.credential.findUnique({ where: { id } });
-  
+
   if (!credential) {
     throw ApiError.notFound("Credential not found");
   }
@@ -283,12 +295,12 @@ export async function updateCredentialBlockchainData(
  * Revoke a credential
  */
 export async function revokeCredential(
-  id: string, 
+  id: string,
   input: RevokeCredentialInput,
   revokedBy: string
 ): Promise<Credential> {
   const credential = await prisma.credential.findUnique({ where: { id } });
-  
+
   if (!credential) {
     throw ApiError.notFound("Credential not found");
   }
@@ -310,7 +322,7 @@ export async function revokeCredential(
   // Also deactivate all share links
   await prisma.shareLink.updateMany({
     where: { credentialId: id },
-    data: { 
+    data: {
       isActive: false,
       revokedAt: new Date(),
     },
@@ -363,7 +375,7 @@ export async function listCredentials(query: ListCredentialsQuery) {
  * Create a shareable link for a credential
  */
 export async function createShareLink(
-  input: CreateShareLinkInput, 
+  input: CreateShareLinkInput,
   studentId: string
 ): Promise<ShareLink> {
   const credential = await prisma.credential.findUnique({
@@ -435,7 +447,7 @@ export async function getShareLinkByToken(token: string) {
   // Increment view count
   await prisma.shareLink.update({
     where: { id: shareLink.id },
-    data: { 
+    data: {
       viewCount: { increment: 1 },
       lastViewedAt: new Date(),
     },

@@ -84,6 +84,78 @@ export const getMe = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/v1/auth/validate-token
+ * Validate an activation token (public endpoint)
+ */
+export const validateToken = asyncHandler(async (req: Request, res: Response) => {
+  const token = req.query.token as string;
+
+  if (!token) {
+    res.status(400).json({
+      success: false,
+      error: "Token is required",
+    });
+    return;
+  }
+
+  const result = await authService.validateActivationToken(token);
+
+  res.json({
+    success: true,
+    data: result,
+  });
+});
+
+/**
+ * POST /api/v1/auth/activate
+ * Complete account activation after Privy login
+ */
+export const activate = asyncHandler(async (req: Request, res: Response) => {
+  const { token, privyUserId, walletAddress } = req.body;
+
+  if (!token || !privyUserId || !walletAddress) {
+    res.status(400).json({
+      success: false,
+      error: "token, privyUserId, and walletAddress are required",
+    });
+    return;
+  }
+
+  const result = await authService.completeActivation(token, privyUserId, walletAddress);
+
+  if (!result.success) {
+    res.status(400).json({
+      success: false,
+      error: result.error,
+    });
+    return;
+  }
+
+  // Log activation
+  await createAuditLog({
+    action: "USER_ACTIVATED",
+    actorId: result.user!.id,
+    entityType: "User",
+    entityId: result.user!.id,
+    metadata: { walletAddress },
+    ipAddress: req.ip || "unknown",
+  });
+
+  res.json({
+    success: true,
+    data: {
+      user: {
+        id: result.user!.id,
+        email: result.user!.email,
+        name: result.user!.name,
+        role: result.user!.role,
+        status: result.user!.status,
+      },
+    },
+  });
+});
+
+/**
  * POST /api/v1/auth/wallet
  * Link wallet address to user (currently not stored in DB, managed by Privy)
  */

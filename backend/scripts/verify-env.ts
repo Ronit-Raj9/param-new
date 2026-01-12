@@ -11,16 +11,16 @@ interface EnvVar {
 
 const envVars: EnvVar[] = [
   { name: "NODE_ENV", required: false, description: "Environment (development/production)" },
-  { name: "PORT", required: false, description: "Server port (default: 3000)" },
+  { name: "PORT", required: false, description: "Server port (default: 4000)" },
   { name: "DATABASE_URL", required: true, description: "PostgreSQL connection string" },
   { name: "REDIS_URL", required: true, description: "Redis connection URL" },
   { name: "JWT_SECRET", required: true, description: "JWT signing secret" },
   { name: "PRIVY_APP_ID", required: true, description: "Privy application ID" },
   { name: "PRIVY_APP_SECRET", required: true, description: "Privy application secret" },
-  { name: "BLOCKCHAIN_RPC_URL", required: true, description: "Ethereum RPC endpoint" },
-  { name: "BLOCKCHAIN_PRIVATE_KEY", required: true, description: "Wallet private key for signing" },
-  { name: "NFT_CONTRACT_ADDRESS", required: true, description: "Deployed NFT contract address" },
-  { name: "FRONTEND_URL", required: false, description: "Frontend URL for CORS" },
+  { name: "RPC_URL", required: false, description: "Blockchain RPC URL" },
+  { name: "MINTER_PRIVATE_KEY", required: false, description: "Private key for minting (optional)" },
+  { name: "STUDENT_RECORDS_CONTRACT", required: false, description: "StudentRecords contract address" },
+  { name: "SEMESTER_NFT_CONTRACT", required: false, description: "SemesterNFT contract address" },
 ];
 
 function verify() {
@@ -32,12 +32,12 @@ function verify() {
 
   for (const envVar of envVars) {
     const value = process.env[envVar.name];
-    
+
     if (value) {
       const masked = envVar.name.includes("SECRET") || envVar.name.includes("KEY") || envVar.name.includes("JWT")
         ? `${value.substring(0, 4)}${"*".repeat(Math.min(value.length - 4, 20))}`
         : value;
-      
+
       present.push(`✅ ${envVar.name}: ${masked}`);
     } else if (envVar.required) {
       missing.push(`❌ ${envVar.name}: MISSING (${envVar.description})`);
@@ -50,7 +50,7 @@ function verify() {
   // Print results
   console.log("Present variables:");
   present.forEach((msg) => console.log(`  ${msg}`));
-  
+
   if (missing.length > 0) {
     console.log("\nMissing required variables:");
     missing.forEach((msg) => console.log(`  ${msg}`));
@@ -58,7 +58,7 @@ function verify() {
 
   // Test database connection
   console.log("\n🔌 Testing connections...\n");
-  
+
   if (process.env.DATABASE_URL) {
     try {
       const url = new URL(process.env.DATABASE_URL);

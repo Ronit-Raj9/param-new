@@ -21,16 +21,25 @@ export function DegreePage() {
   useEffect(() => {
     async function fetchDegree() {
       if (!api.isReady) return
-      
+
       try {
         setIsLoading(true)
-        const data = await api.get<{ success: boolean; data: { degree: Credential | null; shareLinks: ShareLink[] } }>(
-          "/v1/credentials/degree"
+        // Fetch degree
+        const degreeData = await api.get<{ success: boolean; data: Credential | null }>(
+          "/v1/credentials/student/degree"
         )
 
-        if (data.success && data.data) {
-          setDegree(data.data.degree || null)
-          setShareLinks(data.data.shareLinks || [])
+        // Fetch share links
+        const sharesData = await api.get<{ success: boolean; data: ShareLink[] }>(
+          "/v1/credentials/shares/me"
+        )
+
+        if (degreeData.success) {
+          setDegree(degreeData.data)
+        }
+
+        if (sharesData.success && sharesData.data) {
+          setShareLinks(sharesData.data)
         }
       } catch (err) {
         console.error("Error fetching degree:", err)

@@ -32,11 +32,15 @@ const envSchema = z.object({
   BLOCKCHAIN_RPC_URL: z.string().url().optional(),
   BLOCKCHAIN_CHAIN_ID: z.string().default("84532").transform(Number),
   BLOCKCHAIN_PRIVATE_KEY: z.string().optional(),
-  MINTER_PRIVATE_KEY: z.string().optional(), // Fallback: raw private key for minting (NOT recommended for production)
   NFT_CONTRACT_ADDRESS: z.string().optional(),
   BLOCK_EXPLORER_URL: z.string().url().default("https://sepolia.basescan.org"),
+
+  // Contract Addresses (deployed contracts)
+  STUDENT_RECORDS_CONTRACT: z.string().optional(),
+  COLLEGE_REGISTRY_CONTRACT: z.string().optional(),
   SEMESTER_NFT_CONTRACT: z.string().optional(),
   DEGREE_NFT_CONTRACT: z.string().optional(),
+  CERTIFICATE_NFT_CONTRACT: z.string().optional(),
 
   // JWT
   JWT_SECRET: z.string().min(32),
@@ -49,7 +53,7 @@ const envSchema = z.object({
 
   // Rate Limiting
   RATE_LIMIT_WINDOW_MS: z.string().default("60000").transform(Number),
-  RATE_LIMIT_MAX_REQUESTS: z.string().default("100").transform(Number),
+  RATE_LIMIT_MAX_REQUESTS: z.string().default("10000").transform(Number),
 
   // File Upload
   MAX_FILE_SIZE_MB: z.string().default("10").transform(Number),

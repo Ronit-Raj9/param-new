@@ -59,8 +59,8 @@ export function AdminDashboard() {
     async function fetchDashboardStats() {
       try {
         setIsLoading(true)
-        const data = await api.get<ApiResponse<DashboardStats>>("/dashboard/admin/stats")
-        
+        const data = await api.get<ApiResponse<DashboardStats>>("/v1/dashboard/admin/stats")
+
         if (data.success) {
           setStats(data.data ?? null)
         }

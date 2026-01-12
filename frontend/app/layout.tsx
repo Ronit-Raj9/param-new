@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     title: "PARAM - Academic Credential Management",
     description: "Secure academic credential management system for IIITM Gwalior",
   },
-    generator: 'v0.app'
+  generator: 'v0.app'
 }
 
 export const viewport: Viewport = {
@@ -53,7 +53,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${geistMono.variable} font-sans antialiased overflow-x-hidden`}>
+      <body className={`${inter.variable} ${geistMono.variable} font-sans antialiased overflow-x-hidden`} suppressHydrationWarning>
         <PrivyProvider>
           <QueryProvider>
             <AuthProvider>

@@ -44,3 +44,16 @@ export const getQuickStats = asyncHandler(async (_req: Request, res: Response) =
     data,
   });
 });
+
+/**
+ * GET /api/v1/dashboard/admin/counts
+ * Get admin sidebar badge counts
+ */
+export const getSidebarCounts = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await dashboardService.getSidebarCounts();
+
+  res.json({
+    success: true,
+    data,
+  });
+});

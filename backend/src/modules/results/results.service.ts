@@ -27,7 +27,7 @@ export function calculateGrade(percentage: number): { grade: string; gradePoints
       return { grade: scale.grade, gradePoints: scale.gradePoints };
     }
   }
-  
+
   return { grade: "F", gradePoints: 0 };
 }
 
@@ -37,7 +37,7 @@ export function calculateGrade(percentage: number): { grade: string; gradePoints
 export function calculateSGPA(courseResults: { credits: number; gradePoints: number }[]): number {
   const totalCredits = courseResults.reduce((sum, cr) => sum + cr.credits, 0);
   const totalPoints = courseResults.reduce((sum, cr) => sum + (cr.credits * cr.gradePoints), 0);
-  
+
   return totalCredits > 0 ? Number((totalPoints / totalCredits).toFixed(2)) : 0;
 }
 
@@ -84,22 +84,22 @@ export async function createSemesterResult(input: CreateSemesterResultInput): Pr
     // If grade not provided, calculate from totalMarks if available
     let grade = cr.grade;
     let gradePoints = cr.gradePoints;
-    
+
     if (!grade && cr.totalMarks !== undefined) {
       const calculated = calculateGrade(cr.totalMarks);
       grade = calculated.grade;
       gradePoints = calculated.gradePoints;
     }
-    
+
     // Default grade if still not set
     if (!grade) {
       grade = "F";
       gradePoints = 0;
     }
-    
+
     // Earned credits = credits if passed (grade != F), 0 otherwise
     const earnedCredits = grade !== "F" ? course.credits : 0;
-    
+
     return {
       courseId: cr.courseId,
       studentId: input.studentId,
@@ -156,10 +156,10 @@ export async function createSemesterResult(input: CreateSemesterResultInput): Pr
     return result;
   });
 
-  logger.info({ 
-    semesterResultId: semesterResult.id, 
+  logger.info({
+    semesterResultId: semesterResult.id,
     studentId: input.studentId,
-    semester: input.semester 
+    semester: input.semester
   }, "Semester result created");
 
   return semesterResult;
@@ -176,7 +176,7 @@ export async function bulkUploadResults(input: BulkUploadResultsInput, uploadedB
 
   // Group results by student
   const resultsByStudent = new Map<string, typeof input.results>();
-  
+
   for (const result of input.results) {
     if (!resultsByStudent.has(result.enrollmentNumber)) {
       resultsByStudent.set(result.enrollmentNumber, []);
@@ -236,24 +236,24 @@ export async function bulkUploadResults(input: BulkUploadResultsInput, uploadedB
       const courseResults = studentResults.map((sr) => {
         const course = courseMap.get(sr.courseCode);
         if (!course) throw new Error(`Course ${sr.courseCode} not found`);
-        
+
         // Calculate grade from totalMarks if provided
         let grade = sr.grade;
         let gradePoints = sr.gradePoints;
-        
+
         if (!grade && sr.totalMarks !== undefined) {
           const calculated = calculateGrade(sr.totalMarks);
           grade = calculated.grade;
           gradePoints = calculated.gradePoints;
         }
-        
+
         if (!grade) {
           grade = "F";
           gradePoints = 0;
         }
-        
+
         const earnedCredits = grade !== "F" ? course.credits : 0;
-        
+
         return {
           courseId: course.id,
           studentId: student.id,
@@ -309,11 +309,11 @@ export async function bulkUploadResults(input: BulkUploadResultsInput, uploadedB
     }
   }
 
-  logger.info({ 
+  logger.info({
     uploadedBy,
     semester: input.semester,
     successCount: results.success.length,
-    errorCount: results.errors.length 
+    errorCount: results.errors.length
   }, "Bulk result upload completed");
 
   return results;
@@ -375,7 +375,7 @@ export async function getStudentResults(studentId: string) {
   });
 
   // Calculate CGPA
-  const allCredits = results.flatMap((r) => 
+  const allCredits = results.flatMap((r) =>
     r.courseResults.map((cr) => ({
       credits: cr.credits,
       gradePoints: cr.gradePoints,
@@ -457,11 +457,15 @@ export async function updateCourseResult(id: string, input: UpdateCourseResultIn
   return result;
 }
 
+import { queueSyncSemesterResult } from "../../queues/blockchain.queue.js";
+
+// ... (existing imports)
+
 /**
  * Update semester result status
  */
 export async function updateSemesterResultStatus(
-  id: string, 
+  id: string,
   input: UpdateSemesterResultStatusInput,
   updatedBy: string
 ): Promise<SemesterResult> {
@@ -508,12 +512,20 @@ export async function updateSemesterResultStatus(
     data: updateData,
   });
 
-  logger.info({ 
-    semesterResultId: id, 
+  logger.info({
+    semesterResultId: id,
     previousStatus: existing.status,
     newStatus: input.status,
-    updatedBy 
+    updatedBy
   }, "Semester result status updated");
+
+  // BLOCKCHAIN HOOK: Sync to chain on approval
+  // This will mint the NFT and eventually update status to ISSUED
+  if (input.status === "APPROVED") {
+    queueSyncSemesterResult(id).catch((err) =>
+      logger.error({ err, semesterResultId: id }, "Failed to queue semester result sync")
+    );
+  }
 
   return result;
 }
@@ -531,7 +543,7 @@ export async function listResults(query: ListResultsQuery) {
   if (semester) where.semester = semester;
   if (academicYear) where.academicYear = academicYear;
   if (status) where.status = status;
-  
+
   if (programId || batchYear) {
     where.student = {};
     if (programId) where.student.programId = programId;
@@ -548,7 +560,12 @@ export async function listResults(query: ListResultsQuery) {
             program: { select: { name: true, code: true } },
           },
         },
-        _count: { select: { courseResults: true } },
+        courseResults: {
+          include: {
+            course: { select: { code: true, name: true } },
+          },
+          orderBy: { course: { code: "asc" } },
+        },
       },
       orderBy: [{ academicYear: "desc" }, { semester: "asc" }],
       skip,
@@ -660,7 +677,7 @@ export async function reviewCorrectionRequest(
     if (input.status === "APPROVED") {
       if (existing.entityType === "CourseResult") {
         const updateData: Prisma.CourseResultUpdateInput = {};
-        
+
         // Update the specific field that was corrected
         if (existing.field === "grade") {
           updateData.grade = existing.newValue;

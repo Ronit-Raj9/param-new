@@ -71,7 +71,7 @@ export function StudentsRegistry() {
   const [programs, setPrograms] = useState<Program[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [totalCount, setTotalCount] = useState(0)
-  
+
   // Filters
   const [search, setSearch] = useState("")
   const [programFilter, setProgramFilter] = useState<string>("all")
@@ -107,7 +107,7 @@ export function StudentsRegistry() {
   // Fetch students
   const fetchStudents = useCallback(async () => {
     if (!api.isReady) return
-    
+
     try {
       setIsLoading(true)
       const params = new URLSearchParams()
@@ -138,7 +138,7 @@ export function StudentsRegistry() {
 
   useEffect(() => {
     fetchStudents()
-  }, [debouncedSearch, programFilter, batchFilter, statusFilter, page])
+  }, [debouncedSearch, programFilter, batchFilter, statusFilter, page, api.isReady])
 
   const totalPages = Math.ceil(totalCount / perPage)
 
@@ -357,7 +357,9 @@ export function StudentsRegistry() {
                         <TableCell className="font-mono text-sm">{student.enrollmentNumber}</TableCell>
                         <TableCell className="font-medium">{student.name}</TableCell>
                         <TableCell className="text-sm max-w-[200px] truncate">
-                          {typeof student.program === "string" ? student.program : student.program || "-"}
+                          {typeof student.program === "object" && student.program !== null
+                            ? student.program.name
+                            : student.program || "-"}
                         </TableCell>
                         <TableCell>{student.batch}</TableCell>
                         <TableCell className="text-center">{student.currentSemester || "-"}</TableCell>
@@ -401,10 +403,10 @@ export function StudentsRegistry() {
             </>
           )}
         </CardContent>
-      </Card>
+      </Card >
 
       {/* Add Student Modal */}
-      <Dialog open={isAddModalOpen} onOpenChange={handleModalClose}>
+      < Dialog open={isAddModalOpen} onOpenChange={handleModalClose} >
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Student</DialogTitle>
@@ -622,7 +624,7 @@ export function StudentsRegistry() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog >
     </>
   )
 }

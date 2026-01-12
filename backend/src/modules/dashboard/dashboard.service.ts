@@ -21,23 +21,23 @@ export async function getAdminDashboardStats() {
     prisma.student.count({ where: { status: "ACTIVE" } }),
     prisma.semesterResult.count({ where: { status: "ISSUED" } }),
     prisma.credential.count({ where: { status: "ISSUED" } }),
-    prisma.approval.count({ 
-      where: { 
-        type: "SEMESTER_RESULT", 
-        status: "PENDING" 
-      } 
+    prisma.approval.count({
+      where: {
+        type: "SEMESTER_RESULT",
+        status: "PENDING"
+      }
     }),
-    prisma.approval.count({ 
-      where: { 
-        type: "DEGREE_PROPOSAL", 
-        status: "PENDING" 
-      } 
+    prisma.approval.count({
+      where: {
+        type: "DEGREE_PROPOSAL",
+        status: "PENDING"
+      }
     }),
-    prisma.approval.count({ 
-      where: { 
-        type: "CORRECTION", 
-        status: "PENDING" 
-      } 
+    prisma.approval.count({
+      where: {
+        type: "CORRECTION",
+        status: "PENDING"
+      }
     }),
     prisma.auditLog.findMany({
       take: 10,
@@ -98,7 +98,7 @@ export async function getStudentDashboard(userId: string) {
 
   // Get latest semester result
   const latestResult = await prisma.semesterResult.findFirst({
-    where: { 
+    where: {
       studentId: student.id,
       status: "ISSUED",
     },
@@ -215,5 +215,22 @@ export async function getQuickStats() {
     todayLogins,
     pendingApprovals,
     issuedToday,
+  };
+}
+
+/**
+ * Get sidebar badge counts
+ */
+export async function getSidebarCounts() {
+  const [totalPending, pendingCorrections, pendingDegrees] = await Promise.all([
+    prisma.approval.count({ where: { status: "PENDING" } }),
+    prisma.approval.count({ where: { type: "CORRECTION", status: "PENDING" } }),
+    prisma.approval.count({ where: { type: "DEGREE_PROPOSAL", status: "PENDING" } })
+  ]);
+
+  return {
+    "/admin/approve": totalPending,
+    "/admin/corrections": pendingCorrections,
+    "/admin/degrees": pendingDegrees
   };
 }

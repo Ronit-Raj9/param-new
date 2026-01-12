@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { StatusBadge } from "@/components/status/status-badge"
 import { GradeBadge } from "@/components/results/grade-badge"
 import { formatGPA } from "@/lib/format"
-import { PROGRAMS, BATCHES, SEMESTERS } from "@/lib/constants"
+import { BATCHES, SEMESTERS } from "@/lib/constants"
 import { useToast } from "@/hooks/use-toast"
 import { useApi } from "@/hooks/use-api"
 import { Send, Edit, Trash2, Loader2, FileText } from "lucide-react"
@@ -23,6 +23,13 @@ interface DraftResult {
   status: string
 }
 
+interface Program {
+  id: string
+  code: string
+  name: string
+  shortName: string
+}
+
 interface ApiResponse<T = unknown> {
   success: boolean
   data?: T
@@ -33,12 +40,32 @@ export function ResultsPreview() {
   const { toast } = useToast()
   const api = useApi()
   const [results, setResults] = useState<DraftResult[]>([])
+  const [programs, setPrograms] = useState<Program[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingPrograms, setIsLoadingPrograms] = useState(true)
   const [program, setProgram] = useState("")
   const [batch, setBatch] = useState("")
   const [semester, setSemester] = useState("")
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Fetch programs from API
+  useEffect(() => {
+    async function fetchPrograms() {
+      if (!api.isReady) return
+      try {
+        const data = await api.get<{ success: boolean; data: Program[] }>("/v1/curriculum/programs")
+        if (data.success) {
+          setPrograms(data.data || [])
+        }
+      } catch (err) {
+        console.error("Error fetching programs:", err)
+      } finally {
+        setIsLoadingPrograms(false)
+      }
+    }
+    fetchPrograms()
+  }, [api.isReady])
 
   // Fetch draft results
   useEffect(() => {
@@ -48,14 +75,46 @@ export function ResultsPreview() {
       try {
         setIsLoading(true)
         const params = new URLSearchParams()
-        if (program) params.set("program", program)
-        if (batch) params.set("batch", batch)
-        if (semester) params.set("semester", semester)
+        if (program && program !== "all") params.set("programId", program)
+        if (batch && batch !== "all") params.set("batchYear", batch.split("-")[0]) // Extract year from "2023-2027"
+        if (semester && semester !== "all") params.set("semester", semester)
         params.set("status", "DRAFT")
 
-        const data = await api.get<ApiResponse<DraftResult[]>>(`/results/draft?${params.toString()}`)
-        if (data.success) {
-          setResults(data.data || [])
+        // Use the correct API endpoint with query params
+        const response = await api.get<{
+          success: boolean
+          data: Array<{
+            id: string
+            semester: number
+            sgpa: number | null
+            status: string
+            student: {
+              enrollmentNumber: string
+              name: string
+              user?: { name: string }
+            }
+            courseResults?: Array<{
+              course: { code: string }
+              grade: string
+            }>
+          }>
+          pagination?: { total: number }
+        }>(`/v1/results?${params.toString()}`)
+
+        if (response.success && response.data) {
+          // Transform response to match DraftResult interface
+          const transformedResults: DraftResult[] = response.data.map((r) => ({
+            id: r.id,
+            enrollmentNumber: r.student.enrollmentNumber,
+            name: r.student.user?.name || r.student.name,
+            subjects: r.courseResults?.map((cr) => ({
+              code: cr.course.code,
+              grade: cr.grade,
+            })) || [],
+            sgpa: r.sgpa || 0,
+            status: r.status,
+          }))
+          setResults(transformedResults)
         }
       } catch (err) {
         console.error("Error fetching draft results:", err)
@@ -89,12 +148,20 @@ export function ResultsPreview() {
 
     try {
       setIsSubmitting(true)
-      const data = await api.post<ApiResponse>("/results/submit-for-approval", { resultIds: selectedIds })
 
-      if (data.success) {
+      // Submit each result for approval by updating its status to REVIEWED
+      const promises = selectedIds.map((id) =>
+        api.patch<ApiResponse>(`/v1/results/${id}/status`, { status: "REVIEWED" })
+      )
+
+      const results = await Promise.allSettled(promises)
+      const successCount = results.filter((r) => r.status === "fulfilled").length
+      const failedCount = results.filter((r) => r.status === "rejected").length
+
+      if (successCount > 0) {
         toast({
           title: "Submitted for approval",
-          description: `${selectedIds.length} results sent for approval`,
+          description: `${successCount} results sent for approval${failedCount > 0 ? `. ${failedCount} failed.` : ""}`,
         })
         // Remove submitted results from the list
         setResults((prev) => prev.filter((r) => !selectedIds.includes(r.id)))
@@ -102,7 +169,7 @@ export function ResultsPreview() {
       } else {
         toast({
           title: "Error",
-          description: data.message || "Failed to submit results for approval",
+          description: "Failed to submit results for approval",
           variant: "destructive",
         })
       }
@@ -129,15 +196,15 @@ export function ResultsPreview() {
       <CardContent>
         {/* Filters */}
         <div className="grid gap-4 sm:grid-cols-3 mb-6">
-          <Select value={program} onValueChange={setProgram}>
+          <Select value={program} onValueChange={setProgram} disabled={isLoadingPrograms}>
             <SelectTrigger>
-              <SelectValue placeholder="Select program" />
+              <SelectValue placeholder={isLoadingPrograms ? "Loading..." : "Select program"} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Programs</SelectItem>
-              {PROGRAMS.map((prog) => (
-                <SelectItem key={prog.value} value={prog.value}>
-                  {prog.label}
+              {programs.map((prog) => (
+                <SelectItem key={prog.id} value={prog.id}>
+                  {prog.shortName || prog.name}
                 </SelectItem>
               ))}
             </SelectContent>

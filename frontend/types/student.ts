@@ -5,7 +5,7 @@ export interface Student {
   enrollmentNumber: string
   name: string
   email: string
-  program: string
+  program: string | { id: string; name: string; code: string }
   programId: string
   batch: string
   currentSemester: number
@@ -22,19 +22,19 @@ export interface Student {
   updatedAt: string
 }
 
-export type StudentStatus = 
-  | "PENDING_ACTIVATION" 
-  | "ACTIVE" 
-  | "LEAVE_OF_ABSENCE" 
-  | "REPEAT_YEAR" 
-  | "DROPPED_OUT" 
-  | "EARLY_EXIT" 
+export type StudentStatus =
+  | "PENDING_ACTIVATION"
+  | "ACTIVE"
+  | "LEAVE_OF_ABSENCE"
+  | "REPEAT_YEAR"
+  | "DROPPED_OUT"
+  | "EARLY_EXIT"
   | "GRADUATED"
 
 // Import ResultStatus from result.ts when needed
 export const STUDENT_STATUSES: StudentStatus[] = [
   "PENDING_ACTIVATION",
-  "ACTIVE", 
+  "ACTIVE",
   "LEAVE_OF_ABSENCE",
   "REPEAT_YEAR",
   "DROPPED_OUT",

@@ -2,19 +2,13 @@ export const APP_NAME = "PARAM"
 export const INSTITUTION_NAME = "IIITM Gwalior"
 export const INSTITUTION_FULL_NAME = "ABV-Indian Institute of Information Technology and Management Gwalior"
 
-export const PROGRAMS = [
-  { value: "btech-cse", label: "B.Tech Computer Science & Engineering" },
-  { value: "btech-it", label: "B.Tech Information Technology" },
-  { value: "btech-ece", label: "B.Tech Electronics & Communication Engineering" },
-  { value: "mtech-cse", label: "M.Tech Computer Science & Engineering" },
-  { value: "mtech-it", label: "M.Tech Information Technology" },
-  { value: "mba", label: "Master of Business Administration" },
-  { value: "phd", label: "Doctor of Philosophy" },
-] as const
-
-export const BATCHES = ["2020", "2021", "2022", "2023", "2024", "2025"] as const
+// Generate batch years dynamically (current year - 5 to current year + 1)
+const currentYear = new Date().getFullYear()
+export const BATCHES = Array.from({ length: 7 }, (_, i) => String(currentYear - 5 + i)) as readonly string[]
 
 export const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8] as const
+
+export const GRADES = ["A+", "A", "B+", "B", "C+", "C", "D", "F"] as const
 
 export const STUDENT_STATUSES = [
   { value: "ACTIVE", label: "Active", color: "success" },

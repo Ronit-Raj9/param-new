@@ -15,7 +15,7 @@ interface StudentData {
   enrollmentNumber: string
   name: string
   email: string
-  program: string
+  program: string | { id: string; name: string; code: string; shortName?: string }
   programId: string
   batch: string
   currentSemester: number
@@ -39,10 +39,10 @@ export function StudentProfile() {
   useEffect(() => {
     async function fetchProfile() {
       if (!api.isReady) return
-      
+
       try {
         setIsLoading(true)
-        const data = await api.get<{ success: boolean; data: StudentData }>("/v1/students/profile")
+        const data = await api.get<{ success: boolean; data: StudentData }>("/v1/students/me")
 
         if (data.success) {
           setStudent(data.data)
@@ -125,7 +125,11 @@ export function StudentProfile() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <p className="text-sm text-muted-foreground">Program</p>
-                <p className="font-medium">{student.program}</p>
+                <p className="font-medium">
+                  {typeof student.program === "object" && student.program !== null
+                    ? student.program.name || student.program.shortName
+                    : student.program}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Batch</p>

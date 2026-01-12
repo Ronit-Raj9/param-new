@@ -7,25 +7,33 @@ const router = Router();
 
 // Admin dashboard - requires admin role
 router.get(
-  "/admin/stats", 
-  authenticate, 
-  requireRole("ADMIN", "ACADEMIC"), 
+  "/admin/stats",
+  authenticate,
+  requireRole("ADMIN", "ACADEMIC"),
   dashboardController.getAdminDashboard
+);
+
+// Admin sidebar counts
+router.get(
+  "/admin/counts",
+  authenticate,
+  requireRole("ADMIN", "ACADEMIC"),
+  dashboardController.getSidebarCounts
 );
 
 // Student dashboard - requires student role
 router.get(
-  "/student", 
-  authenticate, 
-  requireStudent, 
+  "/student",
+  authenticate,
+  requireStudent,
   dashboardController.getStudentDashboard
 );
 
 // Quick stats - for any authenticated user
 router.get(
-  "/quick-stats", 
-  authenticate, 
-  requireRole("ADMIN", "ACADEMIC"), 
+  "/quick-stats",
+  authenticate,
+  requireRole("ADMIN", "ACADEMIC"),
   dashboardController.getQuickStats
 );
 

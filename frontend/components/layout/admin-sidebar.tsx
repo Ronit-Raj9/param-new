@@ -26,7 +26,7 @@ export function AdminSidebar({ className }: AdminSidebarProps) {
 
     async function fetchBadgeCounts() {
       try {
-        const data = await api.get("/dashboard/admin/counts")
+        const data = await api.get<{ success: boolean; data: Record<string, number> }>("/v1/dashboard/admin/counts")
         if (data.success) {
           setBadgeCounts(data.data || {})
         }

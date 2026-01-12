@@ -78,7 +78,8 @@ export const adminNavigation: NavItem[] = [
     href: "/admin/results/upload",
     icon: FileText,
     children: [
-      { title: "Upload Results", href: "/admin/results/upload", icon: Upload },
+      { title: "Add Results", href: "/admin/results/add", icon: FileText },
+      { title: "Upload CSV", href: "/admin/results/upload", icon: Upload },
       { title: "Preview & Edit", href: "/admin/results/preview", icon: FileText },
     ],
   },

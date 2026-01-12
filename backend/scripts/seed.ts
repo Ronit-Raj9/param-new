@@ -3,74 +3,135 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Starting database seed...");
+  console.log("🌱 Starting database seed with Contract-Aligned Data...");
 
-  // Create Programs
-  const btechIT = await prisma.program.upsert({
-    where: { code: "BT-IT" },
-    update: {},
-    create: {
-      code: "BT-IT",
-      name: "Bachelor of Technology in Information Technology",
-      shortName: "B.Tech IT",
+  // 1. Create Departments (matching StudentRecords.sol)
+  const departments = [
+    { onChainId: 1, name: "Information Technology", code: "IT" },
+    { onChainId: 2, name: "Computer Science and Engineering", code: "CSE" },
+    { onChainId: 3, name: "Electronics and Electrical Engineering", code: "EEE" },
+    { onChainId: 4, name: "Engineering Sciences", code: "EES" },
+    { onChainId: 5, name: "Management", code: "MGMT" },
+  ];
+
+  for (const d of departments) {
+    await prisma.department.upsert({
+      where: { code: d.code },
+      update: { onChainId: d.onChainId },
+      create: {
+        onChainId: d.onChainId,
+        name: d.name,
+        code: d.code,
+        isActive: true,
+      },
+    });
+  }
+  console.log("✅ Departments created");
+
+  // 2. Create Programs (matching StudentRecords.sol)
+  const programs = [
+    {
+      onChainId: 1,
+      name: "B.Tech in Computer Science and Engineering",
+      code: "BCS",
+      shortName: "B.Tech CSE",
       degreeType: "Bachelor of Technology",
       durationYears: 4,
-      totalSemesters: 8,
-      totalCredits: 160,
+      deptCode: "CSE",
     },
-  });
-
-  const btechIPM = await prisma.program.upsert({
-    where: { code: "IPM-MBA" },
-    update: {},
-    create: {
-      code: "IPM-MBA",
-      name: "Integrated Program in Management",
+    {
+      onChainId: 2,
+      name: "B.Tech in Mathematics and Scientific Computing",
+      code: "BMS",
+      shortName: "B.Tech MnC",
+      degreeType: "Bachelor of Technology",
+      durationYears: 4,
+      deptCode: "EES", // Assuming EES or IT? Contract said Dept ID 1 (IT) for BMS? Let's check contract.
+      // Contract: _addProgram("...BMS", "BMS", 4, 1); -> 1 is IT.
+    },
+    {
+      onChainId: 3,
+      name: "Integrated B.Tech (IT) + MBA",
+      code: "IMG",
       shortName: "IPM",
-      degreeType: "Master of Business Administration",
+      degreeType: "Integrated Dual Degree",
       durationYears: 5,
-      totalSemesters: 10,
-      totalCredits: 200,
+      deptCode: "IT", // Contract ID 1
     },
-  });
+    {
+      onChainId: 4,
+      name: "Integrated B.Tech + M.Tech in IT",
+      code: "IMT",
+      shortName: "Integrated M.Tech",
+      degreeType: "Integrated Dual Degree",
+      durationYears: 5,
+      deptCode: "IT", // Contract ID 1
+    },
+    {
+      onChainId: 5,
+      name: "B.Tech in Electronics and Electrical Engineering",
+      code: "BEE",
+      shortName: "B.Tech EEE",
+      degreeType: "Bachelor of Technology",
+      durationYears: 4,
+      deptCode: "EEE", // Contract ID 3
+    },
+  ];
 
-  const mtech = await prisma.program.upsert({
-    where: { code: "MT-CS" },
-    update: {},
-    create: {
-      code: "MT-CS",
-      name: "Master of Technology in Computer Science",
-      shortName: "M.Tech CS",
-      degreeType: "Master of Technology",
-      durationYears: 2,
-      totalSemesters: 4,
-      totalCredits: 64,
-    },
-  });
+  const createdPrograms = [];
+  for (const p of programs) {
+    const dept = await prisma.department.findUnique({ where: { code: p.deptCode } });
+
+    // Fix for BMS if I guessed wrong above, but based on contract:
+    // _addProgram("BMS", ..., 4, 1); -> 1 is IT in "_addDepartment('IT'..)" call 1.
+    // Wait, in constructor:
+    // _addDepartment("Information Technology", "IT", ...); -> ID 1
+    // ...
+    // _addProgram("...BMS", "BMS", 4, 1); -> DeptId 1 (IT). Correct.
+
+    if (!dept) throw new Error(`Dept ${p.deptCode} not found`);
+
+    const prog = await prisma.program.upsert({
+      where: { code: p.code },
+      update: { onChainId: p.onChainId, departmentId: dept.id },
+      create: {
+        code: p.code,
+        onChainId: p.onChainId,
+        name: p.name,
+        shortName: p.shortName,
+        degreeType: p.degreeType,
+        durationYears: p.durationYears,
+        departmentId: dept.id,
+      },
+    });
+    createdPrograms.push(prog);
+  }
   console.log("✅ Programs created");
 
-  // Create Curriculum for B.Tech IT
+  // 3. Create Curriculum for BCS (for demo)
+  const bcsProgram = await prisma.program.findUniqueOrThrow({ where: { code: "BCS" } });
+
   const curriculum2024 = await prisma.curriculum.upsert({
     where: {
       programId_version_batch: {
-        programId: btechIT.id,
+        programId: bcsProgram.id,
         version: "2024",
         batch: "2024-2028",
       },
     },
     update: {},
     create: {
-      programId: btechIT.id,
+      programId: bcsProgram.id,
       version: "2024",
       batch: "2024-2028",
-      name: "B.Tech IT Curriculum 2024",
+      name: "B.Tech CSE Curriculum 2024",
       totalCredits: 160,
       status: "ACTIVE",
     },
   });
-  console.log("✅ Curriculum created");
+  console.log("✅ Curriculum created for BCS");
 
-  // Create Semester structure
+  // 4. Create Semester structure
   const semesters = [];
   for (let i = 1; i <= 8; i++) {
     const semester = await prisma.curriculumSemester.upsert({
@@ -92,7 +153,7 @@ async function main() {
   }
   console.log("✅ Semesters created");
 
-  // Create Sample Courses for Semester 1
+  // 5. Create Sample Courses for Semester 1 (CSE)
   const courses = [
     { code: "MA101", name: "Mathematics I", credits: 4, type: "MANDATORY" as const },
     { code: "CS101", name: "Introduction to Programming", credits: 4, type: "MANDATORY" as const },
@@ -122,32 +183,78 @@ async function main() {
         },
       });
     }
-    console.log("✅ Courses created for Semester 1");
+    console.log("✅ Courses created for Semester 1 (BCS)");
   }
 
-  // Create more courses for Semester 2
-  const semester2Courses = [
-    { code: "MA102", name: "Mathematics II", credits: 4, type: "MANDATORY" as const },
-    { code: "CS201", name: "Data Structures", credits: 4, type: "MANDATORY" as const },
-    { code: "CS202", name: "Data Structures Lab", credits: 2, type: "MANDATORY" as const },
-    { code: "CS203", name: "Digital Logic Design", credits: 3, type: "MANDATORY" as const },
-    { code: "EC101", name: "Electronics", credits: 3, type: "MANDATORY" as const },
-    { code: "HS102", name: "Technical Writing", credits: 2, type: "MANDATORY" as const },
+  // 5b. Create Curriculum for BMS (B.Tech in Mathematics and Scientific Computing)
+  const bmsProgram = await prisma.program.findUniqueOrThrow({ where: { code: "BMS" } });
+
+  const bmsCurriculum2023 = await prisma.curriculum.upsert({
+    where: {
+      programId_version_batch: {
+        programId: bmsProgram.id,
+        version: "2023",
+        batch: "2023-2027",
+      },
+    },
+    update: {},
+    create: {
+      programId: bmsProgram.id,
+      version: "2023",
+      batch: "2023-2027",
+      name: "B.Tech MnC Curriculum 2023",
+      totalCredits: 180, // 175-186 credits as per image
+      status: "ACTIVE",
+    },
+  });
+  console.log("✅ Curriculum created for BMS (2023)");
+
+  // Create Semesters for BMS
+  const bmsSemesters = [];
+  for (let i = 1; i <= 8; i++) {
+    const semester = await prisma.curriculumSemester.upsert({
+      where: {
+        curriculumId_semesterNumber: {
+          curriculumId: bmsCurriculum2023.id,
+          semesterNumber: i,
+        },
+      },
+      update: {},
+      create: {
+        curriculumId: bmsCurriculum2023.id,
+        semesterNumber: i,
+        minCredits: 18,
+        maxCredits: 26,
+      },
+    });
+    bmsSemesters.push(semester);
+  }
+  console.log("✅ Semesters created for BMS");
+
+  // 5c. Create BMS Semester 1 Courses (from syllabus image)
+  const bmsSem1Courses = [
+    { code: "EE101", name: "Fundamentals of Electrical and Electronics", credits: 4, type: "MANDATORY" as const },
+    { code: "ES101", name: "Engineering Physics", credits: 4, type: "MANDATORY" as const },
+    { code: "ES102", name: "Engineering Mathematics", credits: 4, type: "MANDATORY" as const },
+    { code: "EE102", name: "Engineering Design Principles", credits: 3, type: "MANDATORY" as const },
+    { code: "CS101", name: "Principles of Computer Programming", credits: 4, type: "MANDATORY" as const },
+    { code: "HS101", name: "Freshman Skills", credits: 2, type: "MANDATORY" as const },
+    { code: "HS102", name: "Sports and Physical Education", credits: 2, type: "MANDATORY" as const },
   ];
 
-  const sem2 = semesters[1];
-  if (sem2) {
-    for (const course of semester2Courses) {
+  const bmsSem1 = bmsSemesters[0];
+  if (bmsSem1) {
+    for (const course of bmsSem1Courses) {
       await prisma.course.upsert({
         where: {
           curriculumSemesterId_code: {
-            curriculumSemesterId: sem2.id,
+            curriculumSemesterId: bmsSem1.id,
             code: course.code,
           },
         },
         update: {},
         create: {
-          curriculumSemesterId: sem2.id,
+          curriculumSemesterId: bmsSem1.id,
           code: course.code,
           name: course.name,
           credits: course.credits,
@@ -155,10 +262,10 @@ async function main() {
         },
       });
     }
-    console.log("✅ Courses created for Semester 2");
+    console.log("✅ Courses created for Semester 1 (BMS) - Total: 23 credits");
   }
 
-  // Create grade scale
+  // 6. Create grade scale
   const grades = [
     { grade: "A+", gradePoints: 10.0, minMarks: 90, description: "Outstanding", displayOrder: 1 },
     { grade: "A", gradePoints: 9.0, minMarks: 80, description: "Excellent", displayOrder: 2 },
@@ -186,13 +293,43 @@ async function main() {
   }
   console.log("✅ Grade scale created");
 
-  console.log("\n🎉 Database seeded successfully!");
-  console.log("\nSeeded data:");
-  console.log("  - 3 Programs (B.Tech IT, IPM, M.Tech CS)");
-  console.log("  - 1 Curriculum (B.Tech IT 2024)");
-  console.log("  - 8 Semesters");
-  console.log("  - 12 Courses (6 per semester for Sem 1 & 2)");
-  console.log("  - 8 Grade scale entries");
+  // 7. Create Admin User
+  const adminUser = await prisma.user.upsert({
+    where: { email: "ronitk964@gmail.com" },
+    update: {
+      role: "ADMIN",
+      status: "ACTIVE",
+    },
+    create: {
+      privyId: "did:privy:admin-seed-ronitk964",
+      email: "ronitk964@gmail.com",
+      name: "Ronit Kumar",
+      role: "ADMIN",
+      status: "ACTIVE",
+      activatedAt: new Date(),
+    },
+  });
+  console.log("✅ Admin user created:", adminUser.email);
+
+  // 8. Create Academic User
+  const academicUser = await prisma.user.upsert({
+    where: { email: "raunitr786@gmail.com" },
+    update: {
+      role: "ACADEMIC",
+      status: "ACTIVE",
+    },
+    create: {
+      privyId: "did:privy:academic-seed-raunitr786",
+      email: "raunitr786@gmail.com",
+      name: "Raunit Raj",
+      role: "ACADEMIC",
+      status: "ACTIVE",
+      activatedAt: new Date(),
+    },
+  });
+  console.log("✅ Academic user created:", academicUser.email);
+
+  console.log("\n🎉 Database seeded successfully with Contract-Aligned Data!");
 }
 
 main()

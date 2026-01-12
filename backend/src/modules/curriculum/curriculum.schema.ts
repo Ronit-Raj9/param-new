@@ -18,7 +18,7 @@ export const createProgramSchema = z.object({
 
 export const updateProgramSchema = z.object({
   params: z.object({
-    id: z.string().uuid(),
+    id: z.string().cuid(),
   }),
   body: z.object({
     name: z.string().min(2).optional(),
@@ -34,7 +34,7 @@ export const updateProgramSchema = z.object({
 // Curriculum schemas
 export const createCurriculumSchema = z.object({
   body: z.object({
-    programId: z.string().uuid(),
+    programId: z.string().cuid(),
     version: z.string().min(1),
     batch: z.string().min(1),
     name: z.string().min(2),
@@ -58,7 +58,7 @@ export const createCurriculumSchema = z.object({
 
 export const updateCurriculumSchema = z.object({
   params: z.object({
-    id: z.string().uuid(),
+    id: z.string().cuid(),
   }),
   body: z.object({
     version: z.string().optional(),
@@ -72,7 +72,7 @@ export const updateCurriculumSchema = z.object({
 // Course schemas
 export const createCourseSchema = z.object({
   body: z.object({
-    curriculumSemesterId: z.string().uuid(),
+    curriculumSemesterId: z.string().cuid(),
     code: z.string().min(2),
     name: z.string().min(2),
     shortName: z.string().optional(),
@@ -86,7 +86,7 @@ export const createCourseSchema = z.object({
 
 export const updateCourseSchema = z.object({
   params: z.object({
-    id: z.string().uuid(),
+    id: z.string().cuid(),
   }),
   body: z.object({
     name: z.string().min(2).optional(),
@@ -112,7 +112,7 @@ export const listProgramsSchema = z.object({
 
 export const listCurriculumsSchema = z.object({
   query: z.object({
-    programId: z.string().uuid().optional(),
+    programId: z.string().cuid().optional(),
     status: z.enum(["DRAFT", "ACTIVE", "ARCHIVED"]).optional(),
     page: z.coerce.number().min(1).default(1),
     limit: z.coerce.number().min(1).max(100).default(20),

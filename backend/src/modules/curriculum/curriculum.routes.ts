@@ -11,17 +11,19 @@ router.get("/programs/:id", authenticate, curriculumController.getProgram);
 router.post("/programs", authenticate, requireAcademic, curriculumController.createProgram);
 router.patch("/programs/:id", authenticate, requireAcademic, curriculumController.updateProgram);
 
+// Courses - Allow ADMIN and ACADEMIC to manage
+// IMPORTANT: These routes MUST come before /:id to avoid matching "/courses" as an id
+router.get("/courses", authenticate, curriculumController.listCourses);
+router.post("/courses", authenticate, requireAcademic, curriculumController.createCourse);
+router.get("/courses/:id", authenticate, curriculumController.getCourse);
+router.patch("/courses/:id", authenticate, requireAcademic, curriculumController.updateCourse);
+router.delete("/courses/:id", authenticate, requireAcademic, curriculumController.deleteCourse);
+
 // Curriculums - Allow ADMIN and ACADEMIC to manage
 router.get("/", authenticate, curriculumController.listCurriculums);
 router.get("/active/:programId", authenticate, curriculumController.getActiveCurriculum);
 router.get("/:id", authenticate, curriculumController.getCurriculum);
 router.post("/", authenticate, requireAcademic, curriculumController.createCurriculum);
 router.patch("/:id", authenticate, requireAcademic, curriculumController.updateCurriculum);
-
-// Courses - Allow ADMIN and ACADEMIC to manage
-router.post("/courses", authenticate, requireAcademic, curriculumController.createCourse);
-router.get("/courses/:id", authenticate, curriculumController.getCourse);
-router.patch("/courses/:id", authenticate, requireAcademic, curriculumController.updateCourse);
-router.delete("/courses/:id", authenticate, requireAcademic, curriculumController.deleteCourse);
 
 export default router;

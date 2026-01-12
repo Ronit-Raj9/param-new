@@ -1,8 +1,36 @@
+/**
+ * Blockchain Service
+ * 
+ * Legacy blockchain service for backwards compatibility.
+ * For new code, prefer using the specific contract services:
+ * - contracts/student-records.service.ts
+ * - contracts/semester-nft.service.ts
+ * - contracts/degree-nft.service.ts
+ * - contracts/certificate-nft.service.ts
+ * - chain-sync.service.ts (high-level orchestration)
+ */
+
 import { ethers } from "ethers";
-import { getProvider, CREDENTIAL_NFT_ABI, CREDENTIAL_NFT_ADDRESS } from "../config/blockchain.js";
+import { 
+  getProvider, 
+  CREDENTIAL_NFT_ABI, 
+  CREDENTIAL_NFT_ADDRESS,
+  contractAddresses,
+  getContract,
+  isBlockchainEnabled,
+} from "../config/blockchain.js";
 import { env } from "../config/env.js";
 import { createLogger } from "../utils/logger.js";
 import * as privyWalletService from "./privy-wallet.service.js";
+
+// Re-export contract services for convenience
+export * as studentRecordsContract from "./contracts/student-records.service.js";
+export * as semesterNftContract from "./contracts/semester-nft.service.js";
+export * as degreeNftContract from "./contracts/degree-nft.service.js";
+export * as certificateNftContract from "./contracts/certificate-nft.service.js";
+export * as chainSync from "./chain-sync.service.js";
+export * from "./contracts/types.js";
+export * from "./contracts/utils.js";
 
 const logger = createLogger("blockchain-service");
 
@@ -23,31 +51,23 @@ interface CredentialNFTContract {
 async function getSignerAsync(): Promise<ethers.Wallet> {
   const signer = await privyWalletService.getSigner();
   if (!signer) {
-    throw new Error("No wallet configured - set MINTER_PRIVATE_KEY or PRIVY_WALLET_ID");
+    throw new Error("No wallet configured - set PRIVY_ADMIN_WALLET_ID in .env");
   }
   return signer;
 }
 
 /**
- * @deprecated Use getSignerAsync instead - kept for backwards compatibility
+ * @deprecated Use getSignerAsync instead - this function is no longer supported
  */
 function getSigner(): ethers.Wallet {
-  const provider = getProvider();
-  if (!provider) {
-    throw new Error("Blockchain provider not configured");
-  }
-
-  if (!env.MINTER_PRIVATE_KEY) {
-    throw new Error("MINTER_PRIVATE_KEY not configured");
-  }
-
-  return new ethers.Wallet(env.MINTER_PRIVATE_KEY, provider);
+  throw new Error("getSigner() is deprecated - use Privy wallet via getSignerAsync() or signAndSendTransaction()");
 }
 
 /**
- * Get credential NFT contract instance
+ * Get legacy credential NFT contract instance
+ * @deprecated Use specific contract services instead
  */
-function getContract(signerOrProvider?: ethers.Wallet | ethers.JsonRpcProvider): ethers.Contract {
+function getLegacyContract(signerOrProvider?: ethers.Wallet | ethers.JsonRpcProvider): ethers.Contract {
   if (!CREDENTIAL_NFT_ADDRESS) {
     throw new Error("CREDENTIAL_NFT_ADDRESS not configured");
   }
@@ -62,6 +82,7 @@ function getContract(signerOrProvider?: ethers.Wallet | ethers.JsonRpcProvider):
 
 /**
  * Mint a credential NFT
+ * @deprecated Use semesterNftContract.mintReport or degreeNftContract.finalizeDegree instead
  */
 export async function mintCredentialNFT(
   recipientAddress: string,
@@ -70,7 +91,7 @@ export async function mintCredentialNFT(
 ): Promise<{ tokenId: string; transactionHash: string }> {
   try {
     const signer = getSigner();
-    const contract = getContract(signer) as unknown as CredentialNFTContract;
+    const contract = getLegacyContract(signer) as unknown as CredentialNFTContract;
 
     logger.info({ recipientAddress, tokenURI }, "Minting credential NFT");
 
@@ -143,11 +164,12 @@ export async function batchMintCredentialNFTs(
 
 /**
  * Revoke a credential NFT
+ * @deprecated Use semesterNftContract.revokeReport or degreeNftContract.revokeDegree instead
  */
 export async function revokeCredentialNFT(tokenId: string, reason: string): Promise<string> {
   try {
     const signer = getSigner();
-    const contract = getContract(signer) as unknown as CredentialNFTContract;
+    const contract = getLegacyContract(signer) as unknown as CredentialNFTContract;
 
     logger.info({ tokenId, reason }, "Revoking credential NFT");
 
@@ -169,10 +191,11 @@ export async function revokeCredentialNFT(tokenId: string, reason: string): Prom
 
 /**
  * Check if a credential NFT is revoked
+ * @deprecated Use specific contract services instead
  */
 export async function isCredentialRevoked(tokenId: string): Promise<boolean> {
   try {
-    const contract = getContract() as unknown as CredentialNFTContract;
+    const contract = getLegacyContract() as unknown as CredentialNFTContract;
     const isRevoked = await contract.isRevoked(tokenId);
     return isRevoked;
   } catch (error) {
@@ -183,6 +206,7 @@ export async function isCredentialRevoked(tokenId: string): Promise<boolean> {
 
 /**
  * Get credential NFT metadata
+ * @deprecated Use specific contract services instead
  */
 export async function getCredentialMetadata(tokenId: string): Promise<{
   tokenURI: string;
@@ -191,7 +215,7 @@ export async function getCredentialMetadata(tokenId: string): Promise<{
   isRevoked: boolean;
 }> {
   try {
-    const contract = getContract() as unknown as CredentialNFTContract;
+    const contract = getLegacyContract() as unknown as CredentialNFTContract;
 
     const [tokenURI, owner, documentHash, isRevoked] = await Promise.all([
       contract.tokenURI(tokenId),
@@ -248,7 +272,7 @@ export async function estimateMintGas(
   documentHash: string
 ): Promise<bigint> {
   const signer = getSigner();
-  const contract = getContract(signer);
+  const contract = getLegacyContract(signer);
 
   const gasEstimate = await contract.mint!.estimateGas(
     recipientAddress,
@@ -274,7 +298,29 @@ export async function getCurrentGasPrice(): Promise<bigint> {
 
 /**
  * Check if blockchain is configured and available
+ * @deprecated Use isBlockchainEnabled from config/blockchain.ts
  */
-export function isBlockchainEnabled(): boolean {
-  return !!(env.RPC_URL && env.MINTER_PRIVATE_KEY && CREDENTIAL_NFT_ADDRESS);
+export { isBlockchainEnabled };
+
+/**
+ * Get contract status for all configured contracts
+ */
+export function getContractStatus(): {
+  configured: boolean;
+  contracts: {
+    studentRecords: boolean;
+    semesterNft: boolean;
+    degreeNft: boolean;
+    certificateNft: boolean;
+  };
+} {
+  return {
+    configured: isBlockchainEnabled(),
+    contracts: {
+      studentRecords: !!contractAddresses.studentRecords,
+      semesterNft: !!contractAddresses.semesterReportNft,
+      degreeNft: !!contractAddresses.degreeNft,
+      certificateNft: !!contractAddresses.certificateNft,
+    },
+  };
 }

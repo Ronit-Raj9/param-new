@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate } from "./auth.middleware.js";
+import { authenticate, optionalAuth as optionalAuthenticate } from "./auth.middleware.js";
 import { requireAdmin } from "../../middleware/role.guard.js";
 import * as authController from "./auth.controller.js";
 
@@ -7,6 +7,10 @@ const router = Router();
 
 // Public routes
 router.post("/login", authController.login);
+
+// Activation routes (public - token-based auth)
+router.get("/validate-token", authController.validateToken);
+router.post("/activate", authController.activate);
 
 // Protected routes
 router.get("/me", authenticate, authController.getMe);

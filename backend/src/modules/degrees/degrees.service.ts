@@ -2,26 +2,33 @@ import { prisma } from "../../config/database.js";
 import { ApiError } from "../../middleware/error.handler.js";
 import { createLogger } from "../../utils/logger.js";
 import type { DegreeProposal, Prisma } from "@prisma/client";
-import type { 
-  CreateDegreeProposalInput, 
+import type {
+  CreateDegreeProposalInput,
   AcademicReviewInput,
   AdminReviewInput,
-  ListDegreeProposalsQuery 
+  ListDegreeProposalsQuery
 } from "./degrees.schema.js";
 
 const logger = createLogger("degrees-service");
+
+import {
+  queueProposeDegree,
+  queueApproveDegree
+} from "../../queues/blockchain.queue.js";
+
+// ... (existing imports)
 
 /**
  * Create a degree proposal
  */
 export async function createDegreeProposal(
-  input: CreateDegreeProposalInput, 
+  input: CreateDegreeProposalInput,
   createdBy: string
 ): Promise<DegreeProposal> {
-  // Verify student exists and is active
+  // ... (existing validation logic)
   const student = await prisma.student.findUnique({
     where: { id: input.studentId },
-    include: { 
+    include: {
       program: true,
       semesterResults: {
         where: { status: "ISSUED" },
@@ -49,10 +56,10 @@ export async function createDegreeProposal(
     throw ApiError.conflict("Student already has a pending or approved degree proposal");
   }
 
-  // Calculate total credits and CGPA
+  // ... (existing logic for credits calculation)
   const issuedResults = student.semesterResults;
   const totalCredits = issuedResults.reduce((sum, r) => sum + r.totalCredits, 0);
-  
+
   // Calculate CGPA from all course results
   const allCourseResults = await prisma.courseResult.findMany({
     where: {
@@ -67,11 +74,11 @@ export async function createDegreeProposal(
   let cgpa = 0;
   if (allCourseResults.length > 0) {
     const totalWeightedPoints = allCourseResults.reduce(
-      (sum, cr) => sum + (cr.course.credits * cr.gradePoints), 
+      (sum, cr) => sum + (cr.course.credits * cr.gradePoints),
       0
     );
     const totalCreditHours = allCourseResults.reduce(
-      (sum, cr) => sum + cr.course.credits, 
+      (sum, cr) => sum + cr.course.credits,
       0
     );
     cgpa = totalCreditHours > 0 ? Number((totalWeightedPoints / totalCreditHours).toFixed(2)) : 0;
@@ -83,7 +90,7 @@ export async function createDegreeProposal(
   // Validate eligibility
   const requiredCredits = student.program.totalCredits;
   const validationErrors: string[] = [];
-  
+
   if (totalCredits < requiredCredits) {
     validationErrors.push(`Insufficient credits: ${totalCredits}/${requiredCredits}`);
   }
@@ -108,8 +115,39 @@ export async function createDegreeProposal(
   });
 
   logger.info({ proposalId: proposal.id, studentId: input.studentId }, "Degree proposal created");
+
+  // BLOCKCHAIN HOOK: Propose on chain if it's pending academic (or admin?)
+  // Actually, we usually wait for Academic approval before proposing to chain?
+  // The plan said "Proposal (Frontend: 'Propose Degree') -> queueProposeDegree".
+  // Let's assume we propose on chain when it reaches PENDING_ADMIN (after academic review)? 
+  // OR if we skip academic review. 
+  // The contracts have proposeDegree -> approveDegree -> finalizeDegree.
+  // proposeDegree is typically done by ACADEMIC_ROLE.
+  // Let's hook it here if the status is appropriate, or maybe after academic review?
+  // Re-reading plan: "Backend: blockchainService.proposeDegree(...)".
+  // Let's put it on PENDING_ADMIN transition, which happens in academicReview or creation if no academic review needed.
+  // But here status is PENDING_ACADEMIC.
+
+  // Wait, if we propose on chain now, the blockchain state is "Proposed".
+  // Then when Admin approves, it becomes "Approved".
+  // If we propose here, it might be too early if Academic rejects it.
+
+  // Let's look at academicReview. If approved there -> PENDING_ADMIN.
+  // THAT is logically when "The University" (Academic side) proposes it to the Admin.
+
+  // HOWEVER, the `chainSyncService.proposeDegreeOnChain` checks:
+  // `if (proposal.status !== "PENDING_ADMIN") throw ...`
+  // So we MUST call it when status is PENDING_ADMIN.
+
+  // So:
+  // 1. In `academicReviewDegreeProposal`: If action='approve' -> queueProposeDegree.
+  // 2. In `createDegreeProposal`: If we skip academic review (unlikely based on code), check status.
+  // The code sets it to PENDING_ACADEMIC. So we DON'T queue here.
+
   return proposal;
 }
+
+// ... (academicReviewDegreeProposal)
 
 /**
  * Academic review of a degree proposal
@@ -133,7 +171,7 @@ export async function academicReviewDegreeProposal(
   }
 
   const newStatus = input.action === "approve" ? "PENDING_ADMIN" : "REJECTED";
-  
+
   const proposal = await prisma.degreeProposal.update({
     where: { id },
     data: {
@@ -148,6 +186,14 @@ export async function academicReviewDegreeProposal(
   });
 
   logger.info({ proposalId: id, status: newStatus }, "Degree proposal academic review completed");
+
+  // BLOCKCHAIN HOOK: Propose on chain if approved by academic
+  if (input.action === "approve") {
+    queueProposeDegree(id).catch((err) =>
+      logger.error({ err, degreeProposalId: id }, "Failed to queue degree proposal")
+    );
+  }
+
   return proposal;
 }
 
@@ -200,6 +246,14 @@ export async function adminReviewDegreeProposal(
   });
 
   logger.info({ proposalId: id, status: newStatus }, "Degree proposal admin review completed");
+
+  // BLOCKCHAIN HOOK: Approve on chain if approved by admin
+  if (input.action === "approve") {
+    queueApproveDegree(id).catch((err) =>
+      logger.error({ err, degreeProposalId: id }, "Failed to queue degree approval")
+    );
+  }
+
   return proposal;
 }
 

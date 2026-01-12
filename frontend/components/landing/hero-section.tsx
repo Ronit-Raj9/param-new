@@ -109,9 +109,9 @@ export function HeroSection() {
         <div className="mt-10 sm:mt-12 md:mt-14 pt-8 sm:pt-10 border-t border-white/20 px-4 sm:px-0">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 max-w-3xl mx-auto">
             {[
-              { value: "10,000+", label: "Students" },
-              { value: "50,000+", label: "Credentials Issued" },
-              { value: "100%", label: "Verified" },
+              { value: "500+", label: "Students" },
+              { value: "1,000+", label: "Credentials" },
+              { value: "100%", label: "Blockchain Verified" },
               { value: "24/7", label: "Available" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">

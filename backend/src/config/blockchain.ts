@@ -1,5 +1,15 @@
 import { ethers } from "ethers";
 import { env } from "./env.js";
+import { readFileSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = dirname(__filename);
+
+// ===========================================
+// PROVIDER CONFIGURATION
+// ===========================================
 
 // Provider singleton
 let provider: ethers.JsonRpcProvider | null = null;
@@ -32,33 +42,68 @@ export async function testBlockchainConnection(): Promise<boolean> {
   }
 }
 
-// Get block explorer URL for transaction
+// ===========================================
+// BLOCK EXPLORER URLS
+// ===========================================
+
 export function getExplorerTxUrl(txHash: string): string {
   return `${env.BLOCK_EXPLORER_URL}/tx/${txHash}`;
 }
 
-// Get block explorer URL for address
 export function getExplorerAddressUrl(address: string): string {
   return `${env.BLOCK_EXPLORER_URL}/address/${address}`;
 }
 
-// Get block explorer URL for token
 export function getExplorerTokenUrl(contractAddress: string, tokenId: string): string {
   return `${env.BLOCK_EXPLORER_URL}/nft/${contractAddress}/${tokenId}`;
 }
 
-// Blockchain configuration
-export const blockchainConfig = {
-  chainId: env.CHAIN_ID,
-  rpcUrl: env.RPC_URL,
-  explorerUrl: env.BLOCK_EXPLORER_URL,
-  contracts: {
-    semesterNft: env.SEMESTER_NFT_CONTRACT,
-    degreeNft: env.DEGREE_NFT_CONTRACT,
-  },
-};
+// ===========================================
+// CONTRACT ADDRESSES
+// ===========================================
 
-// Minimal ERC-721 ABI for reading
+export const contractAddresses = {
+  studentRecords: env.STUDENT_RECORDS_CONTRACT || "",
+  collegeRegistry: env.COLLEGE_REGISTRY_CONTRACT || "",
+  semesterReportNft: env.SEMESTER_NFT_CONTRACT || "",
+  degreeNft: env.DEGREE_NFT_CONTRACT || "",
+  certificateNft: env.CERTIFICATE_NFT_CONTRACT || "",
+} as const;
+
+// Legacy alias for backwards compatibility
+export const CREDENTIAL_NFT_ADDRESS = contractAddresses.semesterReportNft;
+
+// ===========================================
+// ABI LOADING
+// ===========================================
+
+// Path to ABI files (relative to project root: ../../contracts/ABI)
+const ABI_DIR = join(__dirname, "..", "..", "..", "contracts", "ABI");
+
+/**
+ * Load ABI from JSON file
+ */
+function loadABI(filename: string): ethers.InterfaceAbi {
+  try {
+    const abiPath = join(ABI_DIR, filename);
+    const abiJson = readFileSync(abiPath, "utf-8");
+    return JSON.parse(abiJson);
+  } catch (error) {
+    console.warn(`⚠️ Could not load ABI from ${filename}:`, error);
+    return [];
+  }
+}
+
+// Load ABIs from contract build artifacts
+export const ABIs = {
+  studentRecords: loadABI("StudentRecord.json"),
+  collegeRegistry: loadABI("CollegeRegistry.json"),
+  semesterReportNft: loadABI("SemesterReportNFT.json"),
+  degreeNft: loadABI("DegreeNFT.json"),
+  certificateNft: loadABI("CertificateNFT.json"),
+} as const;
+
+// Minimal ERC-721 ABI for reading (fallback)
 export const ERC721_ABI = [
   "function name() view returns (string)",
   "function symbol() view returns (string)",
@@ -68,29 +113,114 @@ export const ERC721_ABI = [
   "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
 ];
 
-// Credential NFT ABI (extends ERC-721)
+// Legacy credential NFT ABI (for backwards compatibility)
 export const CREDENTIAL_NFT_ABI = [
   ...ERC721_ABI,
-  // Custom functions for credential NFT
   "function mint(address to, string memory tokenURI, bytes32 documentHash) returns (uint256)",
   "function batchMint(address[] memory recipients, string[] memory tokenURIs, bytes32[] memory documentHashes) returns (uint256[])",
   "function revoke(uint256 tokenId, string memory reason)",
   "function isRevoked(uint256 tokenId) view returns (bool)",
   "function getDocumentHash(uint256 tokenId) view returns (bytes32)",
   "function getCredentialInfo(uint256 tokenId) view returns (address owner, string memory uri, bytes32 docHash, bool revoked, uint256 issuedAt)",
-  // Events
   "event CredentialIssued(uint256 indexed tokenId, address indexed recipient, bytes32 documentHash)",
   "event CredentialRevoked(uint256 indexed tokenId, string reason)",
 ];
 
-// Export contract address (use semester NFT as default credential contract)
-export const CREDENTIAL_NFT_ADDRESS = env.SEMESTER_NFT_CONTRACT || "";
+// ===========================================
+// BLOCKCHAIN CONFIGURATION
+// ===========================================
 
-// Get contract instance
-export function getCredentialNFTContract(): ethers.Contract | null {
-  const p = getProvider();
-  if (!p || !CREDENTIAL_NFT_ADDRESS) {
+export const blockchainConfig = {
+  chainId: env.CHAIN_ID,
+  rpcUrl: env.RPC_URL,
+  explorerUrl: env.BLOCK_EXPLORER_URL,
+  contracts: {
+    studentRecords: contractAddresses.studentRecords,
+    collegeRegistry: contractAddresses.collegeRegistry,
+    semesterNft: contractAddresses.semesterReportNft,
+    degreeNft: contractAddresses.degreeNft,
+    certificateNft: contractAddresses.certificateNft,
+  },
+};
+
+// ===========================================
+// CONTRACT INSTANCES
+// ===========================================
+
+/**
+ * Get contract instance by type
+ */
+export function getContract(
+  type: keyof typeof contractAddresses,
+  signerOrProvider?: ethers.Wallet | ethers.JsonRpcProvider
+): ethers.Contract | null {
+  const address = contractAddresses[type];
+  const abi = ABIs[type];
+
+  if (!address) {
+    console.warn(`⚠️ Contract address for ${type} not configured`);
     return null;
   }
-  return new ethers.Contract(CREDENTIAL_NFT_ADDRESS, CREDENTIAL_NFT_ABI, p);
+
+  if (!abi || (Array.isArray(abi) && abi.length === 0)) {
+    console.warn(`⚠️ ABI for ${type} not loaded`);
+    return null;
+  }
+
+  const providerOrSigner = signerOrProvider || getProvider();
+  if (!providerOrSigner) {
+    console.warn("⚠️ No provider available");
+    return null;
+  }
+
+  return new ethers.Contract(address, abi, providerOrSigner);
+}
+
+// Legacy function for backwards compatibility
+export function getCredentialNFTContract(): ethers.Contract | null {
+  return getContract("semesterReportNft");
+}
+
+// ===========================================
+// CONTRACT STATUS CHECK
+// ===========================================
+
+/**
+ * Check which contracts are configured
+ */
+export function getContractStatus(): Record<keyof typeof contractAddresses, boolean> {
+  return {
+    studentRecords: !!contractAddresses.studentRecords,
+    collegeRegistry: !!contractAddresses.collegeRegistry,
+    semesterReportNft: !!contractAddresses.semesterReportNft,
+    degreeNft: !!contractAddresses.degreeNft,
+    certificateNft: !!contractAddresses.certificateNft,
+  };
+}
+
+/**
+ * Check if a wallet is configured (either Privy or fallback private key)
+ */
+function isWalletConfigured(): boolean {
+  return !!env.PRIVY_ADMIN_WALLET_ID;
+}
+
+/**
+ * Check if blockchain integration is fully configured
+ */
+export function isBlockchainFullyConfigured(): boolean {
+  return !!(
+    env.RPC_URL &&
+    isWalletConfigured() &&
+    contractAddresses.studentRecords &&
+    contractAddresses.semesterReportNft &&
+    contractAddresses.degreeNft
+  );
+}
+
+/**
+ * Check if minimal blockchain is configured (for NFT minting)
+ */
+export function isBlockchainEnabled(): boolean {
+  return !!(env.RPC_URL && isWalletConfigured() && contractAddresses.semesterReportNft);
 }

@@ -1,21 +1,37 @@
 import { prisma } from "../../config/database.js";
 import { ApiError } from "../../middleware/error.handler.js";
 import { createLogger } from "../../utils/logger.js";
+import { sendActivationEmail } from "../../services/email.service.js";
+import { env } from "../../config/env.js";
+import { randomBytes } from "crypto";
 import type { Student, Prisma } from "@prisma/client";
-import type { 
-  CreateStudentInput, 
-  UpdateStudentInput, 
-  ListStudentsQuery, 
+import type {
+  CreateStudentInput,
+  UpdateStudentInput,
+  ListStudentsQuery,
   BulkImportInput,
-  UpdateStudentStatusInput 
+  UpdateStudentStatusInput
 } from "./students.schema.js";
 
 const logger = createLogger("students-service");
 
+import { createPrivyWallet } from "../../config/privy.js";
+
+// ... imports
+
 /**
- * Create a new student with associated user
+ * Generate a secure activation token
  */
-export async function createStudent(input: CreateStudentInput): Promise<Student> {
+function generateActivationToken(): string {
+  return randomBytes(32).toString("hex");
+}
+
+/**
+ * Create a new student with associated user and send activation email
+ */
+export async function createStudent(input: CreateStudentInput, options?: { sendEmail?: boolean }): Promise<Student> {
+  const shouldSendEmail = options?.sendEmail ?? true;
+
   // Check if enrollment number already exists
   const existingEnrollment = await prisma.student.findUnique({
     where: { enrollmentNumber: input.enrollmentNumber },
@@ -40,8 +56,16 @@ export async function createStudent(input: CreateStudentInput): Promise<Student>
     }
   }
 
-  // Create user and student in transaction
-  const student = await prisma.$transaction(async (tx) => {
+  // Create Privy wallet for the student
+  logger.info({ enrollmentNumber: input.enrollmentNumber }, "Creating Privy wallet for new student");
+  const wallet = await createPrivyWallet();
+
+  if (!wallet) {
+    throw new Error("Failed to create Privy wallet for student");
+  }
+
+  // Create user, student, and activation token in transaction
+  const { student, activationToken } = await prisma.$transaction(async (tx) => {
     // Create or get user
     let user = existingUser;
     if (!user) {
@@ -75,6 +99,10 @@ export async function createStudent(input: CreateStudentInput): Promise<Student>
         guardianName: input.guardianName,
         guardianPhone: input.guardianPhone,
         status: "PENDING_ACTIVATION",
+        // Store the wallet info
+        walletId: wallet.id,
+        walletAddress: wallet.address,
+        walletCreatedAt: new Date(),
       },
       include: {
         user: true,
@@ -83,11 +111,86 @@ export async function createStudent(input: CreateStudentInput): Promise<Student>
       },
     });
 
-    return newStudent;
+    // Create activation token (7 days expiry)
+    const token = generateActivationToken();
+    const activationTokenRecord = await tx.activationToken.create({
+      data: {
+        token,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      },
+    });
+
+    return { student: newStudent, activationToken: activationTokenRecord };
   });
 
-  logger.info({ studentId: student.id, enrollmentNumber: input.enrollmentNumber }, "Student created");
+  logger.info({
+    studentId: student.id,
+    enrollmentNumber: input.enrollmentNumber,
+    walletAddress: wallet.address
+  }, "Student created with wallet");
+
+  // Send activation email (non-blocking)
+  if (shouldSendEmail) {
+    const activationLink = `${env.FRONTEND_URL}/activate?token=${activationToken.token}`;
+    sendActivationEmail({
+      to: input.email,
+      name: input.name,
+      enrollmentNumber: input.enrollmentNumber,
+      activationLink,
+    }).catch((error) => {
+      logger.error({ error, studentId: student.id }, "Failed to send activation email");
+    });
+  }
+
   return student;
+}
+
+/**
+ * Resend activation email for a student
+ */
+export async function resendActivationEmail(studentId: string): Promise<{ sent: boolean; message: string }> {
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    include: { user: true },
+  });
+
+  if (!student) {
+    throw ApiError.notFound("Student not found");
+  }
+
+  if (student.status !== "PENDING_ACTIVATION") {
+    return { sent: false, message: "Student is already activated" };
+  }
+
+  // Invalidate any existing tokens
+  await prisma.activationToken.updateMany({
+    where: { userId: student.userId, used: false },
+    data: { used: true },
+  });
+
+  // Create new activation token
+  const token = generateActivationToken();
+  await prisma.activationToken.create({
+    data: {
+      token,
+      userId: student.userId,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  // Send email
+  const activationLink = `${env.FRONTEND_URL}/activate?token=${token}`;
+  const sent = await sendActivationEmail({
+    to: student.email,
+    name: student.name,
+    enrollmentNumber: student.enrollmentNumber,
+    activationLink,
+  });
+
+  logger.info({ studentId, email: student.email, sent }, "Activation email resent");
+
+  return { sent, message: sent ? "Activation email sent successfully" : "Failed to send email" };
 }
 
 /**
@@ -157,8 +260,16 @@ export async function getStudentByEnrollment(enrollmentNumber: string) {
   return student;
 }
 
+import {
+  queueSyncStudent,
+  queueIssueCertificate
+} from "../../queues/blockchain.queue.js";
+
+// ... (existing imports)
+
 /**
  * Get student by user ID
+ * Also auto-activates the student if they are still pending (since accessing this means they successfully logged in)
  */
 export async function getStudentByUserId(userId: string) {
   const student = await prisma.student.findUnique({
@@ -170,6 +281,7 @@ export async function getStudentByUserId(userId: string) {
           email: true,
           name: true,
           status: true,
+          privyId: true,
         },
       },
       program: true,
@@ -189,6 +301,52 @@ export async function getStudentByUserId(userId: string) {
       },
     },
   });
+
+  if (!student) {
+    return null;
+  }
+
+  // Auto-activate student if they are pending but have successfully logged in
+  // (accessing this endpoint means they authenticated via Privy)
+  if (student.status === "PENDING_ACTIVATION") {
+    logger.info({ studentId: student.id, userId }, "Auto-activating student on profile access");
+
+    await prisma.$transaction(async (tx) => {
+      // Activate student
+      await tx.student.update({
+        where: { id: student.id },
+        data: {
+          status: "ACTIVE",
+          statusChangedAt: new Date(),
+          statusReason: "Auto-activated on first login",
+        },
+      });
+
+      // Activate user if also pending
+      if (student.user?.status === "PENDING_ACTIVATION") {
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            status: "ACTIVE",
+            activatedAt: new Date(),
+          },
+        });
+      }
+    });
+
+    // Update the returned student object with new status
+    student.status = "ACTIVE";
+    if (student.user) {
+      student.user.status = "ACTIVE";
+    }
+
+    logger.info({ studentId: student.id }, "Student auto-activated successfully");
+
+    // BLOCKCHAIN HOOK: Sync student to chain
+    queueSyncStudent(student.id).catch((err) =>
+      logger.error({ err, studentId: student.id }, "Failed to queue student sync")
+    );
+  }
 
   return student;
 }
@@ -217,7 +375,7 @@ export async function updateStudent(id: string, input: UpdateStudentInput): Prom
         ...(input.curriculumId && { curriculumId: input.curriculumId }),
         ...(input.batch && { batch: input.batch }),
         ...(input.currentSemester && { currentSemester: input.currentSemester }),
-        ...(input.status && { 
+        ...(input.status && {
           status: input.status,
           statusChangedAt: new Date(),
           statusReason: input.statusReason,
@@ -254,7 +412,7 @@ export async function updateStudent(id: string, input: UpdateStudentInput): Prom
  * Update student status
  */
 export async function updateStudentStatus(
-  id: string, 
+  id: string,
   input: UpdateStudentStatusInput
 ): Promise<Student> {
   const existing = await prisma.student.findUnique({ where: { id } });
@@ -277,6 +435,30 @@ export async function updateStudentStatus(
   });
 
   logger.info({ studentId: id, status: input.status }, "Student status updated");
+
+  // BLOCKCHAIN HOOKS
+  try {
+    if (input.status === "ACTIVE") {
+      // Sync to chain when activated
+      await queueSyncStudent(id);
+    } else if (input.status === "DROPPED_OUT" || input.status === "EARLY_EXIT") {
+      // Issue certificate for incomplete studies
+      // Calculate years completed based on current semester or admission year
+      const yearsCompleted = student.currentSemester ? Math.floor(student.currentSemester / 2) : 0;
+
+      if (yearsCompleted >= 1) { // Only issue if at least 1 year completed
+        await queueIssueCertificate(
+          id,
+          yearsCompleted,
+          input.reason || input.status
+        );
+      }
+    }
+  } catch (error) {
+    logger.error({ error, studentId: id }, "Failed to trigger blockchain hook");
+    // Don't fail the request, just log error
+  }
+
   return student;
 }
 
@@ -360,10 +542,10 @@ export async function bulkImportStudents(input: BulkImportInput, createdBy: stri
     }
   }
 
-  logger.info({ 
-    createdBy, 
-    successCount: results.success.length, 
-    errorCount: results.errors.length 
+  logger.info({
+    createdBy,
+    successCount: results.success.length,
+    errorCount: results.errors.length
   }, "Bulk import completed");
 
   return results;

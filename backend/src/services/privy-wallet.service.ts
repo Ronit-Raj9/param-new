@@ -2,14 +2,10 @@
  * Privy Wallet Service
  * 
  * Provides wallet functionality using Privy Server Wallets for secure key management.
- * Falls back to raw private key if Privy wallet is not configured.
- * 
- * For production, ALWAYS use Privy Server Wallets instead of raw private keys.
  * See: https://docs.privy.io/wallets/
  */
 
 import { ethers } from "ethers";
-import { env } from "../config/env.js";
 import { getProvider } from "../config/blockchain.js";
 import {
     getAdminWalletId,
@@ -22,7 +18,7 @@ import { createLogger } from "../utils/logger.js";
 const logger = createLogger("privy-wallet-service");
 
 // Wallet mode configuration
-export type WalletMode = "privy" | "raw" | "none";
+export type WalletMode = "privy" | "none";
 
 /**
  * Determine which wallet mode to use
@@ -31,15 +27,13 @@ export function getWalletMode(): WalletMode {
     if (isPrivyWalletConfigured()) {
         return "privy";
     }
-    if (env.MINTER_PRIVATE_KEY) {
-        return "raw";
-    }
     return "none";
 }
 
 /**
- * Get a signer for signing transactions (raw key mode only)
- * For Privy mode, use signAndSendTransaction instead
+ * Get a signer for signing transactions
+ * Note: Privy wallets use API-based signing, so this returns null for Privy mode.
+ * Use signAndSendTransaction() or signMessage() for Privy operations.
  */
 export async function getSigner(): Promise<ethers.Wallet | null> {
     const provider = getProvider();
@@ -51,47 +45,28 @@ export async function getSigner(): Promise<ethers.Wallet | null> {
     const mode = getWalletMode();
 
     if (mode === "privy") {
-        // Privy wallets don't expose a traditional signer
-        // Use signAndSendTransaction() or signMessage() for Privy operations
-        logger.warn("Privy mode uses API-based signing, not ethers.Wallet signer");
-
-        // Fall back to raw key if available for compatibility
-        if (env.MINTER_PRIVATE_KEY) {
-            logger.info("Falling back to MINTER_PRIVATE_KEY for ethers signer");
-            return new ethers.Wallet(env.MINTER_PRIVATE_KEY, provider);
-        }
+        // Privy wallets use API-based signing, not ethers.Wallet
+        // The contract services should use Privy's signAndSendTransaction
+        logger.debug("Privy mode - use signAndSendTransaction() for transactions");
         return null;
     }
 
-    if (mode === "raw") {
-        return new ethers.Wallet(env.MINTER_PRIVATE_KEY!, provider);
-    }
-
-    logger.error("No wallet configured - set PRIVY_ADMIN_WALLET_ID or MINTER_PRIVATE_KEY");
+    logger.error("No wallet configured - set PRIVY_ADMIN_WALLET_ID in .env");
     return null;
 }
 
 /**
- * Sign a message using the configured wallet
+ * Sign a message using Privy wallet
  */
 export async function signMessage(message: string): Promise<string | null> {
     const mode = getWalletMode();
 
-    if (mode === "privy") {
-        return privySignMessage(message);
-    }
-
-    const signer = await getSigner();
-    if (!signer) {
+    if (mode !== "privy") {
+        logger.error("No wallet configured - set PRIVY_ADMIN_WALLET_ID in .env");
         return null;
     }
 
-    try {
-        return await signer.signMessage(message);
-    } catch (error) {
-        logger.error({ error }, "Failed to sign message");
-        return null;
-    }
+    return privySignMessage(message);
 }
 
 /**
@@ -172,7 +147,7 @@ export async function checkWalletHealth(): Promise<{
 }
 
 /**
- * Send a transaction using the configured wallet
+ * Send a transaction using Privy wallet
  */
 export async function sendTransaction(tx: {
     to: string;
@@ -182,27 +157,10 @@ export async function sendTransaction(tx: {
 }): Promise<{ hash: string } | null> {
     const mode = getWalletMode();
 
-    if (mode === "privy") {
-        return privySignAndSend(tx);
-    }
-
-    // Raw key mode
-    const signer = await getSigner();
-    if (!signer) {
+    if (mode !== "privy") {
+        logger.error("No wallet configured - set PRIVY_ADMIN_WALLET_ID in .env");
         return null;
     }
 
-    try {
-        const response = await signer.sendTransaction({
-            to: tx.to,
-            value: tx.value ? BigInt(tx.value) : undefined,
-            data: tx.data,
-            chainId: tx.chainId,
-        });
-        logger.info({ txHash: response.hash }, "Transaction sent");
-        return { hash: response.hash };
-    } catch (error) {
-        logger.error({ error }, "Failed to send transaction");
-        throw error;
-    }
+    return privySignAndSend(tx);
 }

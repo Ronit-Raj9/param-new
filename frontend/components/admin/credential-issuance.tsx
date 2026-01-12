@@ -1,18 +1,31 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { PROGRAMS, BATCHES, SEMESTERS } from "@/lib/constants"
+import { BATCHES, SEMESTERS } from "@/lib/constants"
 import { useToast } from "@/hooks/use-toast"
+import { useApi } from "@/hooks/use-api"
 import { Award, FileText, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
+
+interface Program {
+  id: string
+  code: string
+  name: string
+  shortName: string
+}
+
+interface EligibleStudents {
+  count: number
+}
 
 export function CredentialIssuance() {
   const { toast } = useToast()
+  const api = useApi()
   const [issuanceType, setIssuanceType] = useState<"results" | "degree">("results")
   const [program, setProgram] = useState("")
   const [batch, setBatch] = useState("")
@@ -20,24 +33,144 @@ export function CredentialIssuance() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [jobStatus, setJobStatus] = useState<"idle" | "processing" | "complete" | "error">("idle")
+  const [programs, setPrograms] = useState<Program[]>([])
+  const [isLoadingPrograms, setIsLoadingPrograms] = useState(true)
+  const [eligibleCount, setEligibleCount] = useState<number | null>(null)
+  const [totalToProcess, setTotalToProcess] = useState(0)
+  const [successCount, setSuccessCount] = useState(0)
+  const [failedCount, setFailedCount] = useState(0)
+
+  // Fetch programs from API
+  useEffect(() => {
+    async function fetchPrograms() {
+      if (!api.isReady) return
+      try {
+        const data = await api.get<{ success: boolean; data: Program[] }>("/v1/curriculum/programs")
+        if (data.success) {
+          setPrograms(data.data || [])
+        }
+      } catch (err) {
+        console.error("Error fetching programs:", err)
+      } finally {
+        setIsLoadingPrograms(false)
+      }
+    }
+    fetchPrograms()
+  }, [api.isReady])
+
+  // Fetch eligible student count when selection changes
+  useEffect(() => {
+    async function fetchEligibleCount() {
+      if (!api.isReady || !program || !batch) {
+        setEligibleCount(null)
+        return
+      }
+      try {
+        const params = new URLSearchParams({ programId: program, batch })
+        if (issuanceType === "results" && semester) {
+          params.set("semester", semester)
+        }
+        // Try to get count from students endpoint
+        const data = await api.get<{ success: boolean; data: { students?: unknown[]; pagination?: { total: number } } | unknown[] }>(
+          `/v1/students?${params.toString()}&limit=1`
+        )
+        if (data.success) {
+          const total = Array.isArray(data.data) ? data.data.length : (data.data?.pagination?.total ?? null)
+          setEligibleCount(total)
+        }
+      } catch (err) {
+        console.error("Error fetching eligible count:", err)
+        setEligibleCount(null)
+      }
+    }
+    fetchEligibleCount()
+  }, [api.isReady, program, batch, semester, issuanceType])
 
   const handleIssue = async () => {
-    setIsProcessing(true)
-    setJobStatus("processing")
-    setProgress(0)
-
-    // Simulate issuance process
-    for (let i = 0; i <= 100; i += 5) {
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      setProgress(i)
+    if (!api.isReady) {
+      toast({
+        title: "Error",
+        description: "API not ready. Please try again.",
+        variant: "destructive",
+      })
+      return
     }
 
-    setJobStatus("complete")
-    setIsProcessing(false)
-    toast({
-      title: "Issuance complete",
-      description: `Successfully issued ${issuanceType === "results" ? "semester results" : "degree certificates"}`,
-    })
+    setIsProcessing(true)
+    setJobStatus("processing")
+    setProgress(10)
+
+    try {
+      // First get eligible students/credentials
+      const params = new URLSearchParams({
+        programId: program,
+        batch,
+        type: issuanceType === "results" ? "SEMESTER" : "DEGREE"
+      })
+      if (issuanceType === "results" && semester) {
+        params.set("semester", semester)
+      }
+
+      setProgress(20)
+
+      const eligibleData = await api.get<{
+        success: boolean
+        data: Array<{ id: string; credentialId?: string; studentId: string }>
+      }>(`/v1/issuance/eligible?${params.toString()}`)
+
+      if (!eligibleData.success || !eligibleData.data?.length) {
+        throw new Error("No eligible students found for issuance")
+      }
+
+      setProgress(40)
+
+      // Get credential IDs to issue
+      const credentialIds = eligibleData.data
+        .filter(s => s.credentialId)
+        .map(s => s.credentialId as string)
+
+      if (credentialIds.length === 0) {
+        throw new Error("No credentials ready for issuance")
+      }
+
+      // Set total to process for progress display
+      setTotalToProcess(credentialIds.length)
+
+      // Call bulk issuance endpoint
+      const result = await api.post<{
+        success: boolean
+        data: {
+          jobId: string
+          totalQueued: number
+          errors: Array<{ credentialId: string; error: string }>
+        }
+      }>("/v1/issuance/bulk", { credentialIds })
+
+      setProgress(80)
+
+      if (result.success) {
+        setProgress(100)
+        setSuccessCount(result.data.totalQueued)
+        setFailedCount(result.data.errors?.length || 0)
+        setJobStatus("complete")
+        toast({
+          title: "Issuance started",
+          description: `${result.data.totalQueued} credentials queued for blockchain issuance. Job ID: ${result.data.jobId}`,
+        })
+      } else {
+        throw new Error("Failed to start issuance")
+      }
+    } catch (error) {
+      console.error("Issuance error:", error)
+      setJobStatus("error")
+      toast({
+        title: "Issuance failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   return (
@@ -75,14 +208,14 @@ export function CredentialIssuance() {
           {/* Program Selection */}
           <div className="space-y-2">
             <Label>Program</Label>
-            <Select value={program} onValueChange={setProgram}>
+            <Select value={program} onValueChange={setProgram} disabled={isLoadingPrograms}>
               <SelectTrigger>
-                <SelectValue placeholder="Select program" />
+                <SelectValue placeholder={isLoadingPrograms ? "Loading..." : "Select program"} />
               </SelectTrigger>
               <SelectContent>
-                {PROGRAMS.map((prog) => (
-                  <SelectItem key={prog.value} value={prog.value}>
-                    {prog.label}
+                {programs.map((prog) => (
+                  <SelectItem key={prog.id} value={prog.id}>
+                    {prog.shortName || prog.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -135,7 +268,7 @@ export function CredentialIssuance() {
                   {issuanceType === "results" ? "Semester Results" : "Degree Certificate"}
                 </p>
                 <p>
-                  <span className="text-foreground">Program:</span> {PROGRAMS.find((p) => p.value === program)?.label}
+                  <span className="text-foreground">Program:</span> {programs.find((p) => p.id === program)?.shortName || programs.find((p) => p.id === program)?.name}
                 </p>
                 <p>
                   <span className="text-foreground">Batch:</span> {batch}
@@ -146,7 +279,7 @@ export function CredentialIssuance() {
                   </p>
                 )}
                 <p>
-                  <span className="text-foreground">Eligible Students:</span> 45
+                  <span className="text-foreground">Eligible Students:</span> {eligibleCount !== null ? eligibleCount : "–"}
                 </p>
               </div>
             </div>
@@ -200,15 +333,15 @@ export function CredentialIssuance() {
               <Progress value={progress} />
               <div className="grid grid-cols-3 gap-4 text-center text-sm">
                 <div>
-                  <p className="font-medium">{Math.floor((progress / 100) * 45)}</p>
+                  <p className="font-medium">{Math.floor((progress / 100) * totalToProcess)}</p>
                   <p className="text-muted-foreground">Processed</p>
                 </div>
                 <div>
-                  <p className="font-medium">{45 - Math.floor((progress / 100) * 45)}</p>
+                  <p className="font-medium">{totalToProcess - Math.floor((progress / 100) * totalToProcess)}</p>
                   <p className="text-muted-foreground">Remaining</p>
                 </div>
                 <div>
-                  <p className="font-medium">0</p>
+                  <p className="font-medium">{failedCount}</p>
                   <p className="text-muted-foreground">Failed</p>
                 </div>
               </div>
@@ -221,14 +354,14 @@ export function CredentialIssuance() {
                 <CheckCircle2 className="h-8 w-8 text-success" />
               </div>
               <h3 className="font-semibold text-lg">Issuance Complete</h3>
-              <p className="text-muted-foreground mt-1">45 credentials issued successfully</p>
+              <p className="text-muted-foreground mt-1">{successCount} credentials queued successfully</p>
               <div className="mt-6 grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-lg bg-muted text-center">
-                  <p className="text-2xl font-bold text-success">45</p>
+                  <p className="text-2xl font-bold text-success">{successCount}</p>
                   <p className="text-sm text-muted-foreground">Success</p>
                 </div>
                 <div className="p-4 rounded-lg bg-muted text-center">
-                  <p className="text-2xl font-bold">0</p>
+                  <p className="text-2xl font-bold">{failedCount}</p>
                   <p className="text-sm text-muted-foreground">Failed</p>
                 </div>
               </div>
@@ -251,27 +384,11 @@ export function CredentialIssuance() {
             </div>
           )}
 
-          {/* Recent Jobs */}
-          {jobStatus !== "processing" && (
+          {/* Recent Jobs - placeholder for future implementation */}
+          {jobStatus === "idle" && (
             <div className="mt-6 pt-6 border-t">
               <h4 className="font-medium mb-3">Recent Jobs</h4>
-              <div className="space-y-3">
-                {[
-                  { title: "B.Tech CSE 2020 - Sem 7", status: "success", time: "2 hours ago" },
-                  { title: "B.Tech IT 2021 - Sem 5", status: "success", time: "Yesterday" },
-                  { title: "MBA 2022 - Sem 4", status: "success", time: "3 days ago" },
-                ].map((job, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
-                    <span>{job.title}</span>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-success border-success">
-                        {job.status}
-                      </Badge>
-                      <span className="text-muted-foreground">{job.time}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <p className="text-sm text-muted-foreground">No recent issuance jobs found.</p>
             </div>
           )}
         </CardContent>

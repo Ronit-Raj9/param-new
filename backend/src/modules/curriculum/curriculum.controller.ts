@@ -14,17 +14,17 @@ import {
   listCurriculumsSchema,
 } from "./curriculum.schema.js";
 
-// Helper schemas for param validation
-const idParamSchema = z.object({ id: z.string().uuid() });
-const programIdParamSchema = z.object({ programId: z.string().uuid() });
+// Helper schemas for param validation (using cuid since Prisma generates cuid IDs)
+const idParamSchema = z.object({ id: z.string().cuid() });
+const programIdParamSchema = z.object({ programId: z.string().cuid() });
 
 // ============ PROGRAMS ============
 
 export const createProgram = asyncHandler(async (req: Request, res: Response) => {
   const { body } = createProgramSchema.parse({ body: req.body });
-  
+
   const program = await curriculumService.createProgram(body);
-  
+
   // Note: No PROGRAM_CREATED audit action exists, using CURRICULUM_CREATED for curriculum-related operations
   // Programs don't have dedicated audit actions in the schema
 
@@ -44,7 +44,7 @@ export const updateProgram = asyncHandler(async (req: Request, res: Response) =>
   });
 
   const program = await curriculumService.updateProgram(params.id, body);
-  
+
   // Note: No PROGRAM_UPDATED audit action exists in the schema
 
   res.json({ success: true, data: program });
@@ -60,9 +60,9 @@ export const listPrograms = asyncHandler(async (req: Request, res: Response) => 
 
 export const createCurriculum = asyncHandler(async (req: Request, res: Response) => {
   const { body } = createCurriculumSchema.parse({ body: req.body });
-  
+
   const curriculum = await curriculumService.createCurriculum(body);
-  
+
   await createAuditLog({
     action: "CURRICULUM_CREATED",
     actorId: req.user!.id,
@@ -89,7 +89,7 @@ export const updateCurriculum = asyncHandler(async (req: Request, res: Response)
   });
 
   const curriculum = await curriculumService.updateCurriculum(params.id, body);
-  
+
   await createAuditLog({
     action: "CURRICULUM_UPDATED",
     actorId: req.user!.id,
@@ -112,7 +112,7 @@ export const listCurriculums = asyncHandler(async (req: Request, res: Response) 
 export const getActiveCurriculum = asyncHandler(async (req: Request, res: Response) => {
   const { programId } = programIdParamSchema.parse(req.params);
   const curriculum = await curriculumService.getActiveCurriculumForProgram(programId);
-  
+
   if (!curriculum) {
     res.status(404).json({
       success: false,
@@ -128,9 +128,9 @@ export const getActiveCurriculum = asyncHandler(async (req: Request, res: Respon
 
 export const createCourse = asyncHandler(async (req: Request, res: Response) => {
   const { body } = createCourseSchema.parse({ body: req.body });
-  
+
   const course = await curriculumService.createCourse(body);
-  
+
   // Note: No COURSE_CREATED audit action exists, courses are part of curriculum
   await createAuditLog({
     action: "CURRICULUM_UPDATED",
@@ -151,6 +151,40 @@ export const getCourse = asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: course });
 });
 
+/**
+ * GET /api/v1/curriculum/courses
+ * List courses with filters
+ */
+export const listCourses = asyncHandler(async (req: Request, res: Response) => {
+  // Parse query params, handling empty strings by converting to undefined
+  const rawQuery = req.query;
+  
+  // Pre-process to convert empty strings to undefined
+  const programId = typeof rawQuery.programId === 'string' && rawQuery.programId.trim() !== '' 
+    ? rawQuery.programId.trim() 
+    : undefined;
+  const semesterStr = typeof rawQuery.semester === 'string' && rawQuery.semester.trim() !== '' 
+    ? rawQuery.semester.trim() 
+    : undefined;
+  const searchStr = typeof rawQuery.search === 'string' && rawQuery.search.trim() !== '' 
+    ? rawQuery.search.trim() 
+    : undefined;
+
+  // Parse semester to number
+  let semester: number | undefined = undefined;
+  if (semesterStr) {
+    const num = parseInt(semesterStr, 10);
+    if (!isNaN(num) && num >= 1 && num <= 12) {
+      semester = num;
+    }
+  }
+
+  const query = { programId, semester, search: searchStr };
+
+  const courses = await curriculumService.listCourses(query);
+  res.json({ success: true, data: courses });
+});
+
 export const updateCourse = asyncHandler(async (req: Request, res: Response) => {
   const { params, body } = updateCourseSchema.parse({
     params: req.params,
@@ -158,7 +192,7 @@ export const updateCourse = asyncHandler(async (req: Request, res: Response) => 
   });
 
   const course = await curriculumService.updateCourse(params.id, body);
-  
+
   await createAuditLog({
     action: "CURRICULUM_UPDATED",
     actorId: req.user!.id,
@@ -175,7 +209,7 @@ export const updateCourse = asyncHandler(async (req: Request, res: Response) => 
 export const deleteCourse = asyncHandler(async (req: Request, res: Response) => {
   const { id } = idParamSchema.parse(req.params);
   await curriculumService.deleteCourse(id);
-  
+
   await createAuditLog({
     action: "CURRICULUM_UPDATED",
     actorId: req.user!.id,

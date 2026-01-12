@@ -42,27 +42,67 @@ export function ApprovalsQueue() {
   const [notes, setNotes] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Fetch pending approvals
+  // Fetch pending approvals (results in REVIEWED status + degree proposals pending approval)
   const fetchPendingApprovals = useCallback(async () => {
     if (!api.isReady) return
-    
+
     try {
       setIsLoading(true)
-      const data = await api.get<{ success: boolean; data: PendingItem[] }>("/v1/approvals/pending")
-      if (data.success) {
-        setPendingItems(data.data || [])
+
+      // Fetch results in REVIEWED status (waiting for approval)
+      const resultsResponse = await api.get<{
+        success: boolean
+        data: Array<{
+          id: string
+          semester: number
+          academicYear: string
+          sgpa: number | null
+          status: string
+          reviewedAt: string | null
+          student: {
+            enrollmentNumber: string
+            name: string
+            user?: { name: string }
+            program?: { code: string; name: string }
+          }
+          courseResults?: Array<{ id: string }>
+        }>
+      }>("/v1/results?status=REVIEWED")
+
+      const items: PendingItem[] = []
+
+      if (resultsResponse.success && Array.isArray(resultsResponse.data)) {
+        // Transform results to PendingItem format
+        for (const r of resultsResponse.data) {
+          items.push({
+            id: r.id,
+            type: "results",
+            title: `Semester ${r.semester} Results - ${r.student?.enrollmentNumber || "Unknown"}`,
+            submittedBy: r.student?.user?.name || r.student?.name || "Unknown",
+            submittedAt: r.reviewedAt || new Date().toISOString(),
+            details: `${r.student?.program?.code || "Unknown"} | ${r.academicYear} | SGPA: ${r.sgpa?.toFixed(2) || "N/A"}`,
+            recordCount: r.courseResults?.length || 0,
+          })
+        }
       }
+
+      // TODO: Add degree proposals fetch when that feature is complete
+
+      setPendingItems(items)
     } catch (err) {
       console.error("Error fetching pending approvals:", err)
       setPendingItems([])
     } finally {
       setIsLoading(false)
     }
-  }, [api])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api.isReady])
 
   useEffect(() => {
-    fetchPendingApprovals()
-  }, [fetchPendingApprovals])
+    if (api.isReady) {
+      fetchPendingApprovals()
+    }
+  }, [api.isReady, fetchPendingApprovals])
 
   const resultItems = pendingItems.filter((item) => item.type === "results")
   const degreeItems = pendingItems.filter((item) => item.type === "degree")
@@ -88,15 +128,31 @@ export function ApprovalsQueue() {
 
     try {
       setIsSubmitting(true)
-      const data = await api.post<{ success: boolean }>(`/v1/approvals/${selectedItem.id}/${actionType}`, { notes })
 
-      if (data.success) {
-        toast({
-          title: actionType === "approve" ? "Approved" : "Rejected",
-          description: `${selectedItem.title} has been ${actionType === "approve" ? "approved" : "rejected"}`,
+      // For results, use the status update endpoint
+      if (selectedItem.type === "results") {
+        // REVIEWED -> APPROVED (approve) or REVIEWED -> DRAFT (reject/send back)
+        const newStatus = actionType === "approve" ? "APPROVED" : "DRAFT"
+        const data = await api.patch<{ success: boolean }>(`/v1/results/${selectedItem.id}/status`, {
+          status: newStatus,
+          approvalNote: notes || undefined,
         })
-        // Remove item from list
-        setPendingItems((items) => items.filter((item) => item.id !== selectedItem.id))
+
+        if (data.success) {
+          toast({
+            title: actionType === "approve" ? "Approved" : "Sent Back",
+            description: `${selectedItem.title} has been ${actionType === "approve" ? "approved" : "sent back for revision"}`,
+          })
+          // Remove item from list
+          setPendingItems((items) => items.filter((item) => item.id !== selectedItem.id))
+        }
+      } else {
+        // For degree proposals, use the degree proposals API (to be implemented)
+        toast({
+          title: "Not implemented",
+          description: "Degree approval is not yet implemented",
+          variant: "destructive",
+        })
       }
     } catch (err) {
       toast({

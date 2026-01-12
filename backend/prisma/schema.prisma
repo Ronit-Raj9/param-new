@@ -118,11 +118,22 @@ enum JobType {
   CSV_PARSE_RESULTS
   PDF_GENERATE_SEMESTER
   PDF_GENERATE_DEGREE
+  PDF_GENERATE_CERTIFICATE
+  BLOCKCHAIN_SYNC_STUDENT
   BLOCKCHAIN_MINT_SEMESTER
   BLOCKCHAIN_MINT_DEGREE
+  BLOCKCHAIN_MINT_CERTIFICATE
+  BLOCKCHAIN_DEGREE_PROPOSAL
+  BLOCKCHAIN_DEGREE_APPROVAL
   BLOCKCHAIN_REVOKE
   WALLET_CREATE
   EMAIL_SEND
+}
+
+enum SemesterType {
+  EVEN
+  ODD
+  SUMMER
 }
 
 enum AuditAction {
@@ -202,10 +213,11 @@ model User {
   updatedAt     DateTime   @updatedAt
   
   // Relations
-  student       Student?
-  approvals     Approval[]        @relation("ApprovalApprover")
-  auditLogs     AuditLog[]        @relation("AuditActor")
-  corrections   CorrectionRequest[] @relation("CorrectionRequester")
+  student            Student?
+  approvals          Approval[]          @relation("ApprovalApprover")
+  auditLogs          AuditLog[]          @relation("AuditActor")
+  corrections        CorrectionRequest[] @relation("CorrectionRequester")
+  activationTokens   ActivationToken[]
   
   @@index([email])
   @@index([privyId])
@@ -213,9 +225,47 @@ model User {
   @@map("users")
 }
 
+// Activation tokens for student account activation
+model ActivationToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  used      Boolean  @default(false)
+  usedAt    DateTime?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("activation_tokens")
+}
+
+model Department {
+  id          String    @id @default(cuid())
+  onChainId   Int       @unique // Maps to Contract uint8 id
+  name        String
+  code        String    @unique
+  isActive    Boolean   @default(true)
+  
+  // Relations
+  programs    Program[]
+  students    Student[]
+  
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("departments")
+}
+
 model Student {
   id                String        @id @default(cuid())
   userId            String        @unique
+  
+  // On-Chain mapping
+  onChainId         Int?          @unique // Maps to Contract uint256 studentId
   
   // Academic Info
   enrollmentNumber  String        @unique // Roll number
@@ -223,6 +273,7 @@ model Student {
   email             String        // Personal email (may differ from user email)
   
   // Program & Batch
+  departmentId      String?
   programId         String
   curriculumId      String?
   batch             String        // e.g., "2020-2024"
@@ -233,6 +284,7 @@ model Student {
   currentSemester   Int           @default(1)
   totalCredits      Int           @default(0)
   cgpa              Float?
+  activeBacklogCount Int          @default(0) // Number of uncleared backlogs (synced from contract)
   
   // Status
   status            StudentStatus @default(PENDING_ACTIVATION)
@@ -252,6 +304,7 @@ model Student {
   
   // Relations
   user              User          @relation(fields: [userId], references: [id])
+  department        Department?   @relation(fields: [departmentId], references: [id])
   program           Program       @relation(fields: [programId], references: [id])
   curriculum        Curriculum?   @relation(fields: [curriculumId], references: [id])
   semesterResults   SemesterResult[]
@@ -280,6 +333,10 @@ model Student {
 
 model Program {
   id              String       @id @default(cuid())
+  
+  // On-Chain mapping
+  onChainId       Int?         @unique // Maps to Contract uint8
+  
   code            String       @unique // e.g., "BTECH_CSE"
   name            String                // e.g., "B.Tech Computer Science"
   shortName       String                // e.g., "B.Tech CSE"
@@ -289,10 +346,12 @@ model Program {
   totalCredits    Int          @default(160)
   
   isActive        Boolean      @default(true)
+  departmentId    String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   
   // Relations
+  department      Department?  @relation(fields: [departmentId], references: [id])
   students        Student[]
   curricula       Curriculum[]
   
@@ -388,6 +447,7 @@ model SemesterResult {
   id              String       @id @default(cuid())
   studentId       String
   semester        Int
+  semesterType    SemesterType @default(EVEN)
   academicYear    String       // e.g., "2023-24"
   
   // Calculated values
@@ -496,6 +556,12 @@ model Credential {
   
   // Metadata stored on-chain
   metadata          Json?            // JSON metadata for NFT
+  
+  // Certificate-specific fields (for CERTIFICATE type - dropout/early exit)
+  yearsCompleted    Int?             // 1-4 years completed (determines certificate type)
+  exitYear          Int?             // Year of dropout/early exit
+  exitReason        String?          // Reason for dropout/early exit
+  certificateType   String?          // CertificateOfEngineering, DiplomaInEngineering, BSc, BTech
   
   // Revocation
   revokedAt         DateTime?

@@ -64,7 +64,7 @@ export async function getProgramById(id: string): Promise<Program> {
 
 export async function updateProgram(id: string, input: UpdateProgramInput): Promise<Program> {
   const existing = await prisma.program.findUnique({ where: { id } });
-  
+
   if (!existing) {
     throw ApiError.notFound("Program not found");
   }
@@ -210,7 +210,7 @@ export async function getCurriculumById(id: string) {
 
 export async function updateCurriculum(id: string, input: UpdateCurriculumInput): Promise<Curriculum> {
   const existing = await prisma.curriculum.findUnique({ where: { id } });
-  
+
   if (!existing) {
     throw ApiError.notFound("Curriculum not found");
   }
@@ -341,7 +341,7 @@ export async function getCourseById(id: string): Promise<Course> {
 
 export async function updateCourse(id: string, input: UpdateCourseInput): Promise<Course> {
   const existing = await prisma.course.findUnique({ where: { id } });
-  
+
   if (!existing) {
     throw ApiError.notFound("Course not found");
   }
@@ -357,7 +357,7 @@ export async function updateCourse(id: string, input: UpdateCourseInput): Promis
 
 export async function deleteCourse(id: string): Promise<void> {
   const course = await prisma.course.findUnique({ where: { id } });
-  
+
   if (!course) {
     throw ApiError.notFound("Course not found");
   }
@@ -373,4 +373,93 @@ export async function deleteCourse(id: string): Promise<void> {
 
   await prisma.course.delete({ where: { id } });
   logger.info({ courseId: id }, "Course deleted");
+}
+
+/**
+ * List courses with filters for programId and semester
+ */
+export async function listCourses(query: {
+  programId?: string;
+  semester?: number;
+  search?: string;
+}) {
+  const { programId, semester, search } = query;
+
+  const where: Prisma.CourseWhereInput = {};
+
+  // If programId is provided, filter by program's curriculums
+  if (programId) {
+    // Find all curriculums for the program (prefer ACTIVE)
+    const curriculums = await prisma.curriculum.findMany({
+      where: {
+        programId,
+        // Prefer active, but include all if none active
+      },
+      include: {
+        semesters: semester ? {
+          where: { semesterNumber: semester },
+        } : true,
+      },
+      orderBy: {
+        // Prefer ACTIVE status
+        status: 'asc', // ACTIVE comes before DRAFT alphabetically
+      },
+    });
+
+    // Collect all matching semester IDs
+    const semesterIds: string[] = [];
+    for (const curriculum of curriculums) {
+      for (const sem of curriculum.semesters) {
+        semesterIds.push(sem.id);
+      }
+    }
+
+    if (semesterIds.length > 0) {
+      where.curriculumSemesterId = { in: semesterIds };
+    } else {
+      // No matching semesters found for this program
+      logger.warn({ programId, semester }, "No curriculum semesters found for program");
+      return [];
+    }
+  } else if (semester) {
+    // If only semester is provided (no programId), filter by semester number
+    const semesters = await prisma.curriculumSemester.findMany({
+      where: { semesterNumber: semester },
+      select: { id: true },
+    });
+    const semesterIds = semesters.map(s => s.id);
+    if (semesterIds.length > 0) {
+      where.curriculumSemesterId = { in: semesterIds };
+    } else {
+      return [];
+    }
+  }
+  // If neither programId nor semester is provided, return all courses
+
+  if (search) {
+    where.OR = [
+      { code: { contains: search, mode: "insensitive" } },
+      { name: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  const courses = await prisma.course.findMany({
+    where,
+    include: {
+      curriculumSemester: {
+        include: {
+          curriculum: {
+            include: {
+              program: {
+                select: { id: true, name: true, code: true },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { code: "asc" },
+  });
+
+  return courses;
 }

@@ -81,8 +81,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setBackendUser(data.data.user)
         
         // Set cookies for middleware route protection
-        document.cookie = `session=${token.substring(0, 50)}; path=/; max-age=${60 * 60 * 24}` // 24 hours
-        document.cookie = `user_role=${data.data.user.role}; path=/; max-age=${60 * 60 * 24}`
+        // Note: These cookies are for route protection only, not session security
+        // The actual authentication is handled via Privy tokens sent with each request
+        const isProduction = process.env.NODE_ENV === "production"
+        const secureFlag = isProduction ? "; Secure" : ""
+        const cookieMaxAge = 60 * 60 * 24 // 24 hours
+        
+        document.cookie = `session=${token.substring(0, 50)}; path=/; max-age=${cookieMaxAge}; SameSite=Lax${secureFlag}`
+        document.cookie = `user_role=${data.data.user.role}; path=/; max-age=${cookieMaxAge}; SameSite=Lax${secureFlag}`
         
         setHasSynced(true)
       } else {

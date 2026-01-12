@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -11,8 +11,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { PROGRAMS, BATCHES, SEMESTERS } from "@/lib/constants"
+import { BATCHES, SEMESTERS } from "@/lib/constants"
 import { useToast } from "@/hooks/use-toast"
+import { useApi } from "@/hooks/use-api"
 import { Upload, Download, FileText, CheckCircle2, XCircle, AlertTriangle, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -28,18 +29,46 @@ interface ParsedRow {
   isValid: boolean
 }
 
+interface Program {
+  id: string
+  code: string
+  name: string
+  shortName: string
+}
+
 export function CsvUploadPage({ type }: CsvUploadPageProps) {
   const { toast } = useToast()
+  const api = useApi()
   const [step, setStep] = useState<UploadStep>("upload")
   const [file, setFile] = useState<File | null>(null)
   const [parsedData, setParsedData] = useState<ParsedRow[]>([])
   const [progress, setProgress] = useState(0)
   const [dragActive, setDragActive] = useState(false)
+  const [programs, setPrograms] = useState<Program[]>([])
+  const [isLoadingPrograms, setIsLoadingPrograms] = useState(true)
 
   // Form state for results upload
   const [program, setProgram] = useState("")
   const [batch, setBatch] = useState("")
   const [semester, setSemester] = useState("")
+
+  // Fetch programs from API
+  useEffect(() => {
+    async function fetchPrograms() {
+      if (!api.isReady) return
+      try {
+        const data = await api.get<{ success: boolean; data: Program[] }>("/v1/curriculum/programs")
+        if (data.success) {
+          setPrograms(data.data || [])
+        }
+      } catch (err) {
+        console.error("Error fetching programs:", err)
+      } finally {
+        setIsLoadingPrograms(false)
+      }
+    }
+    fetchPrograms()
+  }, [api.isReady])
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -113,20 +142,111 @@ export function CsvUploadPage({ type }: CsvUploadPageProps) {
   }
 
   const handleUpload = async () => {
+    if (!api.isReady) {
+      toast({
+        title: "Error",
+        description: "API not ready. Please try again.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setStep("processing")
     setProgress(0)
 
-    // Simulate upload progress
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise((resolve) => setTimeout(resolve, 200))
-      setProgress(i)
-    }
+    try {
+      // Prepare data for backend
+      const validData = parsedData.filter((r) => r.isValid).map((r) => r.data)
+      
+      if (type === "students") {
+        // Student bulk import
+        const students = validData.map((row) => ({
+          enrollmentNumber: row["enrollment_number"] || "",
+          email: row["email"] || "",
+          name: row["name"] || "",
+          programId: program,
+          batch: parseInt(batch) || new Date().getFullYear(),
+          dateOfBirth: row["date_of_birth"] || undefined,
+        }))
 
-    setStep("complete")
-    toast({
-      title: "Upload complete",
-      description: `Successfully processed ${parsedData.filter((r) => r.isValid).length} records`,
-    })
+        setProgress(20)
+        
+        const result = await api.post<{ success: boolean; data: { success: string[]; errors: { enrollmentNumber: string; error: string }[] } }>(
+          "/v1/students/bulk",
+          { students }
+        )
+
+        setProgress(100)
+
+        if (result.success) {
+          const successCount = result.data.success?.length || 0
+          const errorCount = result.data.errors?.length || 0
+          
+          setStep("complete")
+          toast({
+            title: "Upload complete",
+            description: `Successfully created ${successCount} students. ${errorCount > 0 ? `${errorCount} failed.` : ""}`,
+          })
+        } else {
+          throw new Error("Failed to upload students")
+        }
+      } else {
+        // Results bulk upload
+        if (!semester) {
+          toast({
+            title: "Error",
+            description: "Please select a semester",
+            variant: "destructive",
+          })
+          setStep("preview")
+          return
+        }
+
+        const results = validData.map((row) => ({
+          enrollmentNumber: row["enrollment_number"] || "",
+          grade: row["grade"] || "",
+          gradePoints: parseFloat(row["grade_points"] || "0"),
+          courseCode: row["course_code"] || "",
+          internalMarks: parseFloat(row["internal_marks"] || "0"),
+          externalMarks: parseFloat(row["external_marks"] || "0"),
+        }))
+
+        setProgress(20)
+
+        const result = await api.post<{ success: boolean; data: { success: string[]; errors: { enrollmentNumber: string; error: string }[] } }>(
+          "/v1/results/bulk",
+          {
+            programId: program,
+            semester: parseInt(semester),
+            academicYear: `${parseInt(batch)}-${parseInt(batch) + 1}`,
+            results,
+          }
+        )
+
+        setProgress(100)
+
+        if (result.success) {
+          const successCount = result.data.success?.length || 0
+          const errorCount = result.data.errors?.length || 0
+          
+          setStep("complete")
+          toast({
+            title: "Upload complete",
+            description: `Successfully uploaded ${successCount} results. ${errorCount > 0 ? `${errorCount} failed.` : ""}`,
+          })
+        } else {
+          throw new Error("Failed to upload results")
+        }
+      }
+    } catch (error) {
+      console.error("Upload error:", error)
+      setStep("preview")
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleReset = () => {
@@ -169,14 +289,14 @@ export function CsvUploadPage({ type }: CsvUploadPageProps) {
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="space-y-2">
                     <Label>Program</Label>
-                    <Select value={program} onValueChange={setProgram}>
+                    <Select value={program} onValueChange={setProgram} disabled={isLoadingPrograms}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select program" />
+                        <SelectValue placeholder={isLoadingPrograms ? "Loading..." : "Select program"} />
                       </SelectTrigger>
                       <SelectContent>
-                        {PROGRAMS.map((prog) => (
-                          <SelectItem key={prog.value} value={prog.value}>
-                            {prog.label}
+                        {programs.map((prog) => (
+                          <SelectItem key={prog.id} value={prog.id}>
+                            {prog.shortName || prog.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
